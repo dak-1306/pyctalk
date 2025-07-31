@@ -1,3 +1,4 @@
+# server/connection_handler.py
 import socket
 import threading
 from client_session import ClientSession
@@ -21,5 +22,4 @@ class ConnectionHandler:
             thread = threading.Thread(target=client_session.run)
             thread.daemon = True
             thread.start()
-
 server = ConnectionHandler()
