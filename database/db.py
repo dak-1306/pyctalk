@@ -3,16 +3,19 @@ import mysql.connector
 from mysql.connector import Error
 
 class MySQLDatabase:
-    def __init__(self, host="localhost", user="root", password="", database="pyctalk"):
+    def __init__(self, host="localhost", user="root", password="Trantuananh07042005@", database="pyctalk"):
         self.host = host
         self.user = user
         self.password = password
         self.database = database
         self.connection = None
         self.cursor = None
+        self.connect()
 
     def connect(self):
         """Kết nối tới MySQL server."""
+        if self.connection is not None:
+            return  # tránh kết nối lại
         try:
             self.connection = mysql.connector.connect(
                 host=self.host,
