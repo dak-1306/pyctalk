@@ -104,7 +104,7 @@ class PycTalkClient:
             while self.running:
                 cmd = input("Nhập lệnh (logout / exit): ").strip().lower()
                 if cmd == "logout":
-                    self.send_json({"action": "logout"})
+                    self.send_json({"action": "logout", "data": {"username": username}})
                     print("🚪 Đã đăng xuất.")
                     break
                 elif cmd == "exit":

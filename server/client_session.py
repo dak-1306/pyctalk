@@ -89,7 +89,7 @@ class ClientSession:
                 self.send_response(result)
                 
             elif action == "logout":
-                print(f"🔒 {self.client_address} yêu cầu đăng xuất.")
+                print(f"🔒 {self.client_address}({data['data']['username']}) yêu cầu đăng xuất.")
                 self.send_response({"success": True, "message": "Đã đăng xuất."})
                 self.running = False
             elif action == "send_message":
