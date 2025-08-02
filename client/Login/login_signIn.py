@@ -69,7 +69,7 @@ class RegisterWindow(QtWidgets.QMainWindow):
 
         self.ui.btnSignin.clicked.connect(self.handle_register)
         
-        self.ui.backToLogin.setText('<a href="#">Login?</a>')
+        self.ui.backToLogin.setText('<a href="#">Back to Login</a>')
         self.ui.backToLogin.setOpenExternalLinks(False)
         self.ui.backToLogin.linkActivated.connect(self.open_login_window)
 

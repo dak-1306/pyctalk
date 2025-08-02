@@ -16,13 +16,13 @@ class Ui_MainWindow(object):
         self.main_window = main_window
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(800, 600)
+        MainWindow.resize(310, 450)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
-        self.widget.setGeometry(QtCore.QRect(0, 0, 290, 410))
+        self.widget.setGeometry(QtCore.QRect(10, 0, 290, 410))
         self.widget.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, \n"
-"    stop:0 #e0f7fa, stop:1 #ffffff);\n"
+"    stop:0 #b2ebf2, stop:1 #e0f7fa);\n"
 "border-radius: 15px;")
         self.widget.setObjectName("widget")
         self.label = QtWidgets.QLabel(parent=self.widget)
@@ -38,6 +38,9 @@ class Ui_MainWindow(object):
         self.label.setObjectName("label")
         self.btnLogout = QtWidgets.QPushButton(parent=self.widget)
         self.btnLogout.setGeometry(QtCore.QRect(0, 370, 50, 28))
+        font = QtGui.QFont()
+        font.setFamily("MS Shell Dlg 2")
+        self.btnLogout.setFont(font)
         self.btnLogout.setStyleSheet("QPushButton#btnLogout{\n"
 "    background-color: #4A90E2;\n"
 "    color: white;\n"
@@ -74,6 +77,7 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.label.setText(_translate("MainWindow", "PycTalk"))
         self.btnLogout.setText(_translate("MainWindow", "Logout"))
+
     
     def on_logout_clicked(self):
         self.logout_handler = LogoutHandler(self.client, self.main_window)

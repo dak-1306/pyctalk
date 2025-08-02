@@ -10,6 +10,10 @@ class PycTalkClient:
         self.server_port = server_port
         self.sock = None
         self.running = False
+        
+        # === Biến để điều khiển ping thread ===
+        self.ping_running = False
+        self.ping_thread = None
 
     def connect(self):
         try:
@@ -23,6 +27,9 @@ class PycTalkClient:
             return False
 
     def disconnect(self):
+        # Ngắt ping trước
+        self.stop_ping()
+        
         self.running = False
         if self.sock:
             try:
@@ -125,6 +132,17 @@ class PycTalkClient:
                 except Exception as e:
                     print(f"⚠️ Lỗi ping: {e}")
                     break
+        # Nếu đã có thread ping đang chạy thì không tạo thêm
+        if self.ping_running:
+            return
 
         thread = threading.Thread(target=ping_loop, daemon=True)
         thread.start()
+        
+    def stop_ping(self):
+        """
+        Dừng gửi ping
+        """
+        self.ping_running = False
+        if self.ping_thread and self.ping_thread.is_alive():
+            self.ping_thread.join(timeout=0.1)

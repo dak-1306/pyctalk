@@ -12,7 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_LoginWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(494, 600)
+        MainWindow.resize(310, 450)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
@@ -21,8 +21,9 @@ class Ui_LoginWindow(object):
         self.label = QtWidgets.QLabel(parent=self.widget)
         self.label.setGeometry(QtCore.QRect(0, 0, 290, 410))
         self.label.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, \n"
-"    stop:0 #e0f7fa, stop:1 #ffffff);\n"
-"border-radius: 15px;")
+"    stop:0 #b2ebf2, stop:1 #e0f7fa);\n"
+"border-radius: 15px;\n"
+"")
         self.label.setText("")
         self.label.setObjectName("label")
         self.btnLogin = QtWidgets.QPushButton(parent=self.widget)
@@ -31,6 +32,7 @@ class Ui_LoginWindow(object):
         font.setBold(True)
         font.setWeight(75)
         self.btnLogin.setFont(font)
+        self.btnLogin.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         self.btnLogin.setStyleSheet("QPushButton#btnLogin{\n"
 "    background-color: #4A90E2;\n"
 "    color: white;\n"
@@ -43,8 +45,8 @@ class Ui_LoginWindow(object):
 "    background-color: #357ABD;\n"
 "}\n"
 "QPushButton#btnLogin:pressed {\n"
-"    padding-left: 5px;\n"
-"    padding-top:5px;\n"
+"    padding-right: 5px;\n"
+"    padding-bottom:5px;\n"
 "    background-color: #2C5F9E;       /* Khi nhấn giữ */\n"
 "}\n"
 "")
@@ -72,10 +74,13 @@ class Ui_LoginWindow(object):
         font.setFamily("dripicons-v2")
         font.setPointSize(70)
         self.label_2.setFont(font)
+        self.label_2.setStyleSheet("color: rgba(0, 0, 0, 180)")
         self.label_2.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.label_2.setObjectName("label_2")
         self.creatAccount = QtWidgets.QLabel(parent=self.widget)
         self.creatAccount.setGeometry(QtCore.QRect(20, 360, 240, 20))
+        self.creatAccount.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        self.creatAccount.setStyleSheet("color: rgba(0, 0, 0, 180)")
         self.creatAccount.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignTrailing|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.creatAccount.setObjectName("creatAccount")
         MainWindow.setCentralWidget(self.centralwidget)

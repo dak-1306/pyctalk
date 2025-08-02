@@ -12,7 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_SignInWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(800, 600)
+        MainWindow.resize(310, 450)
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
@@ -21,8 +21,9 @@ class Ui_SignInWindow(object):
         self.label_7 = QtWidgets.QLabel(parent=self.widget)
         self.label_7.setGeometry(QtCore.QRect(0, 0, 290, 410))
         self.label_7.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, \n"
-"    stop:0 #e0f7fa, stop:1 #ffffff);\n"
-"border-radius: 15px;")
+"    stop:0 #b2ebf2, stop:1 #e0f7fa);\n"
+"border-radius: 15px;\n"
+"")
         self.label_7.setText("")
         self.label_7.setObjectName("label_7")
         self.btnSignin = QtWidgets.QPushButton(parent=self.widget)
@@ -31,6 +32,7 @@ class Ui_SignInWindow(object):
         font.setBold(True)
         font.setWeight(75)
         self.btnSignin.setFont(font)
+        self.btnSignin.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         self.btnSignin.setStyleSheet("QPushButton#btnSignin{\n"
 "    background-color: #4A90E2;\n"
 "    color: white;\n"
@@ -43,8 +45,8 @@ class Ui_SignInWindow(object):
 "    background-color: #357ABD;\n"
 "}\n"
 "QPushButton#btnSignin:pressed {\n"
-"    padding-left: 5px;\n"
-"    padding-top:5px;\n"
+"    padding-right: 5px;\n"
+"    padding-bottom:5px;\n"
 "    background-color: #2C5F9E;       /* Khi nhấn giữ */\n"
 "}\n"
 "")
@@ -72,10 +74,13 @@ class Ui_SignInWindow(object):
         font.setFamily("dripicons-v2")
         font.setPointSize(70)
         self.label_8.setFont(font)
+        self.label_8.setStyleSheet("color: rgba(0, 0, 0, 180)")
         self.label_8.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.label_8.setObjectName("label_8")
         self.backToLogin = QtWidgets.QLabel(parent=self.widget)
-        self.backToLogin.setGeometry(QtCore.QRect(20, 370, 240, 20))
+        self.backToLogin.setGeometry(QtCore.QRect(20, 375, 240, 20))
+        self.backToLogin.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        self.backToLogin.setStyleSheet("color: rgba(0, 0, 0, 180)")
         self.backToLogin.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignTrailing|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.backToLogin.setObjectName("backToLogin")
         self.txtEmail = QtWidgets.QLineEdit(parent=self.widget)
@@ -105,7 +110,7 @@ class Ui_SignInWindow(object):
         self.txtPasswordSignin.setPlaceholderText(_translate("MainWindow", "Password"))
         self.txtUsernameSignin.setPlaceholderText(_translate("MainWindow", "Username"))
         self.label_8.setText(_translate("MainWindow", ""))
-        self.backToLogin.setText(_translate("MainWindow", "Login?"))
+        self.backToLogin.setText(_translate("MainWindow", "Back to Login"))
         self.txtEmail.setPlaceholderText(_translate("MainWindow", "Email"))
 
 

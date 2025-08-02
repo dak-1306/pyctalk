@@ -8,22 +8,17 @@ class LogoutHandler:
 
     def logout(self, username):
         try:
+            self.client.stop_ping()
             request = {
                 "action": "logout",
                 "data": {"username": username}
             }
             response = self.client.send_json(request)
-            
-            if response and response.get("success"):
-                print("✅ Đăng xuất thành công.")
-                self.client.disconnect()
-                # đóng cửa sổ hiện tại
-                self.main_window.close()
-                from main import LoginWindow
-                self.main_window = LoginWindow()
-                self.main_window.show()
-            else:
-                QMessageBox.warning(self.main_window, "Lỗi", "Đăng xuất thất bại.")
+            self.client.disconnect()
+            self.main_window.close()
+            from main import LoginWindow
+            self.main_window = LoginWindow()
+            self.main_window.show()
         except Exception as e:
             QMessageBox.critical(self.main_window, "Lỗi", f"Lỗi khi đăng xuất: {e}")
 
