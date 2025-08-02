@@ -87,6 +87,7 @@ class ClientSession:
                 email = data["data"]["email"]
                 result = register.register_user(username, password, email)
                 self.send_response(result)
+                self.running = False # Dừng phiên sau khi đăng ký thành công
                 
             elif action == "logout":
                 print(f"🔒 {self.client_address}({data['data']['username']}) yêu cầu đăng xuất.")
