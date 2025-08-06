@@ -12,7 +12,13 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_SignInWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
+        MainWindow.setMinimumSize(310, 450)  # Kích thước tối thiểu
+        MainWindow.setMaximumSize(310, 450)  # Thêm kích thước tối đa = tối thiểu (không cho phóng to)
         MainWindow.resize(310, 450)
+        
+        # Lưu reference để tính toán responsive
+        self.MainWindow = MainWindow
+        
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
@@ -102,6 +108,30 @@ class Ui_SignInWindow(object):
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        
+        # Thêm event handler cho responsive
+        MainWindow.resizeEvent = self.on_resize
+
+    def on_resize(self, event):
+        """Xử lý responsive khi thay đổi kích thước cửa sổ"""
+        window_width = self.MainWindow.width()
+        window_height = self.MainWindow.height()
+        
+        # Tính toán vị trí widget ở giữa
+        widget_width = 290
+        widget_height = 410
+        
+        # Căn giữa widget
+        x = (window_width - widget_width) // 2
+        y = (window_height - widget_height) // 2
+        
+        # Đảm bảo không ra ngoài biên
+        x = max(10, x)
+        y = max(10, y)
+        
+        # Cập nhật vị trí widget
+        self.widget.setGeometry(QtCore.QRect(x, y, widget_width, widget_height))
+        self.label_7.setGeometry(QtCore.QRect(0, 0, widget_width, widget_height))
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate

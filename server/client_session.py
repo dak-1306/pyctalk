@@ -1,6 +1,6 @@
 import json
-from .Login_server.RegisterHandle import register
-from .Login_server.LoginHandle import login
+from server.Login_server.RegisterHandle import register
+from server.Login_server.LoginHandle import login
 
 import json
 import socket

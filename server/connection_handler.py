@@ -1,7 +1,7 @@
 # server/connection_handler.py
 import socket
 import threading
-from .client_session import ClientSession
+from server.client_session import ClientSession
 
 class ConnectionHandler:
     def __init__(self, host='127.0.0.1', port=9000):
