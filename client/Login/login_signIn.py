@@ -30,6 +30,10 @@ class LoginWindow(QtWidgets.QMainWindow):
             QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập đầy đủ username và password")
             return
 
+        # Đảm bảo disconnect trước khi kết nối mới
+        if self.client.running:
+            self.client.disconnect()
+            
         # xử lý login qua hàm connect + send_json
         if not self.client.connect():
             QMessageBox.critical(self, "Lỗi", "Không thể kết nối đến server")
@@ -44,14 +48,18 @@ class LoginWindow(QtWidgets.QMainWindow):
 
         if response and response.get("success"):
             print("✅ Đăng nhập thành công.")
+            # Lưu thông tin user
+            self.client.user_id = response.get("user_id")
+            self.client.username = username
+            # Client đã tự động lưu user_id và username
             self.client.start_ping(username)
-            self.goto_main_window(username)
+            self.goto_main_window()
         else:
             self.client.disconnect()
             QMessageBox.warning(self, "Thất bại", "Tên đăng nhập hoặc mật khẩu không đúng")
 
-    def goto_main_window(self, username):
-        self.main_window = MainClientWindow(username, self.client)
+    def goto_main_window(self):
+        self.main_window = MainClientWindow(self.client)
         self.main_window.show()
         self.hide()
 
@@ -104,7 +112,8 @@ class RegisterWindow(QtWidgets.QMainWindow):
             self.close()
         else:
             self.client.disconnect()
-            QMessageBox.warning(self, "Thất bại", "Tên đăng nhập hoặc mật khẩu không đúng")
+            error_message = response.get("message", "Đăng ký thất bại") if response else "Không nhận được phản hồi từ server"
+            QMessageBox.warning(self, "Thất bại", error_message)
             
     def open_login_window(self):
         self.login_window = LoginWindow()
@@ -114,7 +123,8 @@ class RegisterWindow(QtWidgets.QMainWindow):
         
         
 class MainClientWindow(QMainWindow):
-    def __init__(self, username, client):
+    def __init__(self, client):
         super().__init__()
-        self.ui = Ui_MainWindow(username, client, self)
+        self.client = client
+        self.ui = Ui_MainWindow(client.get_username(), client, self)
         self.ui.setupUi(self)

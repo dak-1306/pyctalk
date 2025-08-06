@@ -14,6 +14,7 @@ class Ui_MainWindow(object):
         self.username = username
         self.client = client
         self.main_window = main_window
+        self.group_chat_window = None
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(310, 450)
@@ -59,6 +60,32 @@ class Ui_MainWindow(object):
 "}\n"
 "")
         self.btnLogout.setObjectName("btnLogout")
+        
+        # Group Chat Button
+        self.btnGroupChat = QtWidgets.QPushButton(parent=self.widget)
+        self.btnGroupChat.setGeometry(QtCore.QRect(100, 250, 120, 40))
+        font = QtGui.QFont()
+        font.setFamily("MS Shell Dlg 2")
+        font.setPointSize(10)
+        font.setBold(True)
+        self.btnGroupChat.setFont(font)
+        self.btnGroupChat.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:pressed {
+                background-color: #E65100;
+            }
+        """)
+        self.btnGroupChat.setObjectName("btnGroupChat")
+        
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(parent=MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 26))
@@ -71,17 +98,41 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         self.btnLogout.clicked.connect(self.on_logout_clicked)
+        self.btnGroupChat.clicked.connect(self.on_group_chat_clicked)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "PycTalk - Main"))
         self.label.setText(_translate("MainWindow", "PycTalk"))
         self.btnLogout.setText(_translate("MainWindow", "Logout"))
+        self.btnGroupChat.setText(_translate("MainWindow", "Group Chat"))
 
     
     def on_logout_clicked(self):
         self.logout_handler = LogoutHandler(self.client, self.main_window)
         self.logout_handler.logout(self.username)
+    
+    def on_group_chat_clicked(self):
+        from Group_chat.group import GroupChatWindow
+        
+        if not self.client.is_logged_in():
+            QtWidgets.QMessageBox.warning(
+                self.main_window, 
+                "Lỗi", 
+                "Bạn chưa đăng nhập. Vui lòng đăng nhập lại."
+            )
+            return
+        
+        if self.group_chat_window is None or not self.group_chat_window.isVisible():
+            self.group_chat_window = GroupChatWindow(
+                self.client, 
+                self.client.get_user_id(), 
+                self.client.get_username()
+            )
+        
+        self.group_chat_window.show()
+        self.group_chat_window.raise_()
+        self.group_chat_window.activateWindow()
         
 
 

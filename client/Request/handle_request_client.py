@@ -14,6 +14,10 @@ class PycTalkClient:
         # === Biến để điều khiển ping thread ===
         self.ping_running = False
         self.ping_thread = None
+        
+        # === Lưu thông tin user đã đăng nhập ===
+        self.user_id = None
+        self.username = None
 
     def connect(self):
         try:
@@ -30,6 +34,10 @@ class PycTalkClient:
         # Ngắt ping trước
         self.stop_ping()
         
+        # Reset user info
+        self.user_id = None
+        self.username = None
+        
         self.running = False
         if self.sock:
             try:
@@ -37,12 +45,14 @@ class PycTalkClient:
                 print("🔌 Đã ngắt kết nối với server.")
             except:
                 pass
+            finally:
+                self.sock = None
 
     def send_json(self, data: dict):
         try:
-            if not self.sock:
-                print("⚠️ Chưa có kết nối.")
-                return
+            if not self.sock or not self.running:
+                print("⚠️ Chưa có kết nối hoặc kết nối đã bị đóng.")
+                return None
 
             json_request = json.dumps(data).encode()
             prefix = len(json_request).to_bytes(4, 'big')
@@ -122,22 +132,25 @@ class PycTalkClient:
         finally:
             self.disconnect()
 
-    def start_ping(self,username):
+    def start_ping(self, username):
         # Gửi ping đều đặn để giữ kết nối
         def ping_loop():
-            while self.running:
+            while self.ping_running and self.running:
                 try:
                     time.sleep(15)  # mỗi 15–30s
-                    self.send_json({"action": "ping", "data": {"username": username}})
+                    if self.ping_running and self.running and self.sock:
+                        self.send_json({"action": "ping", "data": {"username": username}})
                 except Exception as e:
                     print(f"⚠️ Lỗi ping: {e}")
                     break
-        # Nếu đã có thread ping đang chạy thì không tạo thêm
+            
+        # Nếu đã có thread ping đang chạy thì dừng nó trước
         if self.ping_running:
-            return
-
-        thread = threading.Thread(target=ping_loop, daemon=True)
-        thread.start()
+            self.stop_ping()
+        
+        self.ping_running = True
+        self.ping_thread = threading.Thread(target=ping_loop, daemon=True)
+        self.ping_thread.start()
         
     def stop_ping(self):
         """
@@ -146,3 +159,22 @@ class PycTalkClient:
         self.ping_running = False
         if self.ping_thread and self.ping_thread.is_alive():
             self.ping_thread.join(timeout=0.1)
+            
+    def get_user_id(self):
+        """
+        Lấy user_id của user đã đăng nhập
+        """
+        return self.user_id
+    
+    def get_username(self):
+        """
+        Lấy username của user đã đăng nhập
+        """
+        return self.username
+    
+    def is_logged_in(self):
+        """
+        Kiểm tra user đã đăng nhập chưa
+        """
+        return self.user_id is not None and self.username is not None
+
