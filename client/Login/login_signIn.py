@@ -1,9 +1,10 @@
 import sys
+sys.path.append('./client')
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from UI.mainClient import Ui_MainWindow  # Đổi 'main_client' thành file .py giao diện bạn tạo từ .ui
-from UI.loginUI import Ui_LoginWindow  # Đổi 'login_ui' thành file .py giao diện bạn tạo từ .ui
-from UI.signinUI import Ui_SignInWindow  # File giao diện đăng ký
+from UI.loginUI_large import Ui_LoginWindow  # File giao diện đăng nhập lớn
+from UI.signinUI_large import Ui_SignInWindow  # File giao diện đăng ký lớn
 from Request.handle_request_client import PycTalkClient
 
 
@@ -77,17 +78,35 @@ class RegisterWindow(QtWidgets.QMainWindow):
 
         self.ui.btnSignin.clicked.connect(self.handle_register)
         
-        self.ui.backToLogin.setText('<a href="#">Back to Login</a>')
-        self.ui.backToLogin.setOpenExternalLinks(False)
-        self.ui.backToLogin.linkActivated.connect(self.open_login_window)
+        # Xử lý nút "Back to Login" - bây giờ là QPushButton
+        self.ui.backToLogin.clicked.connect(self.back_to_login_clicked)
 
     def handle_register(self):
         username = self.ui.txtUsernameSignin.text()
         password = self.ui.txtPasswordSignin.text()
+        confirm_password = self.ui.txtConfirmPassword.text()
         email = self.ui.txtEmail.text()
 
-        if not username or not password or not email:
-            QtWidgets.QMessageBox.warning(self, "Lỗi", "Vui lòng nhập đầy đủ thông tin.")
+        # Validation
+        if not username or not password or not confirm_password or not email:
+            QtWidgets.QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập đầy đủ tất cả thông tin.")
+            return
+        
+        if len(username) < 3:
+            QtWidgets.QMessageBox.warning(self, "Lỗi", "Username phải có ít nhất 3 ký tự.")
+            return
+        
+        if len(password) < 6:
+            QtWidgets.QMessageBox.warning(self, "Lỗi", "Mật khẩu phải có ít nhất 6 ký tự.")
+            return
+        
+        if password != confirm_password:
+            QtWidgets.QMessageBox.warning(self, "Lỗi", "Mật khẩu xác nhận không khớp.")
+            return
+        
+        # Simple email validation
+        if "@" not in email or "." not in email:
+            QtWidgets.QMessageBox.warning(self, "Lỗi", "Email không hợp lệ.")
             return
 
         if not self.client.connect():
@@ -107,13 +126,18 @@ class RegisterWindow(QtWidgets.QMainWindow):
 
         if response and response.get("success"):
             print("✅ Đăng ký thành công.")
-            self.login_window = LoginWindow()  # Giữ tham chiếu để không bị huỷ
+            QtWidgets.QMessageBox.information(self, "Thành công", "Đăng ký tài khoản thành công!")
+            self.login_window = LoginWindow()
             self.login_window.show()
             self.close()
         else:
             self.client.disconnect()
             error_message = response.get("message", "Đăng ký thất bại") if response else "Không nhận được phản hồi từ server"
             QMessageBox.warning(self, "Thất bại", error_message)
+            
+    def back_to_login_clicked(self):
+        """Xử lý khi click vào Back to Login"""
+        self.open_login_window()
             
     def open_login_window(self):
         self.login_window = LoginWindow()
@@ -128,3 +152,10 @@ class MainClientWindow(QMainWindow):
         self.client = client
         self.ui = Ui_MainWindow(client.get_username(), client, self)
         self.ui.setupUi(self)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    login_window = LoginWindow()
+    login_window.show()
+    sys.exit(app.exec())
