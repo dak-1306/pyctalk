@@ -58,26 +58,59 @@ class PycTalkClient:
             prefix = len(json_request).to_bytes(4, 'big')
             self.sock.sendall(prefix + json_request)
 
-            # Nhận phản hồi
-            length_prefix = self.sock.recv(4)
-            if not length_prefix:
-                print("⚠️ Server không phản hồi.")
-                return
+            # Nhận phản hồi với timeout và buffer handling
+            self.sock.settimeout(10.0)  # 10 second timeout
+            
+            # Nhận length prefix (4 bytes)
+            length_prefix = b''
+            while len(length_prefix) < 4:
+                chunk = self.sock.recv(4 - len(length_prefix))
+                if not chunk:
+                    print("⚠️ Server đóng kết nối khi nhận length prefix.")
+                    return None
+                length_prefix += chunk
 
             response_length = int.from_bytes(length_prefix, 'big')
+            
+            # Validate response length
+            if response_length <= 0 or response_length > 10 * 1024 * 1024:  # Max 10MB
+                print(f"⚠️ Response length không hợp lệ: {response_length}")
+                return None
+            
+            # Nhận data với buffer size cố định
             response_data = b''
-            while len(response_data) < response_length:
-                chunk = self.sock.recv(response_length - len(response_data))
+            bytes_received = 0
+            while bytes_received < response_length:
+                remaining = response_length - bytes_received
+                chunk_size = min(remaining, 8192)  # 8KB chunks
+                chunk = self.sock.recv(chunk_size)
                 if not chunk:
+                    print(f"⚠️ Connection closed. Received {bytes_received}/{response_length} bytes")
                     break
                 response_data += chunk
+                bytes_received += len(chunk)
 
-            response = json.loads(response_data.decode())
-            print("📥 Phản hồi từ server:", response)
-            return response
+            if not response_data or len(response_data) != response_length:
+                print(f"⚠️ Dữ liệu không đầy đủ. Nhận được {len(response_data)}/{response_length} bytes.")
+                if response_data:
+                    print(f"⚠️ Partial data: {response_data[:100]}...")
+                return None
+                
+            try:
+                response = json.loads(response_data.decode())
+                print("📥 Phản hồi từ server:", response)
+                return response
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Lỗi parse JSON: {e}. Data: {response_data}")
+                return None
+                
+        except socket.timeout:
+            print("⚠️ Timeout khi giao tiếp với server.")
+            return None
         except Exception as e:
             print(f"❌ Lỗi khi gửi/nhận dữ liệu: {e}")
             self.disconnect()
+            return None
 
     def register(self, username, password, email):
         if not self.connect():
@@ -110,18 +143,22 @@ class PycTalkClient:
         }
         response = self.send_json(request)
         if response and response.get("success"):
-            print("✅ Đăng nhập thành công, giữ kết nối chờ các lệnh khác...")
-            self.start_ping(username)
-            self.idle_mode()
+            print("✅ Đăng nhập thành công.")
+            # Lưu thông tin user
+            self.user_id = response.get("user_id")
+            self.username = username
+            self.start_ping()
+            return response
         else:
             self.disconnect()
+            return response
 
     def idle_mode(self):
         try:
             while self.running:
                 cmd = input("Nhập lệnh (logout / exit): ").strip().lower()
                 if cmd == "logout":
-                    self.send_json({"action": "logout", "data": {"username": username}})
+                    self.send_json({"action": "logout", "data": {"username": self.username}})
                     print("🚪 Đã đăng xuất.")
                     break
                 elif cmd == "exit":
@@ -132,14 +169,14 @@ class PycTalkClient:
         finally:
             self.disconnect()
 
-    def start_ping(self, username):
+    def start_ping(self):
         # Gửi ping đều đặn để giữ kết nối
         def ping_loop():
             while self.ping_running and self.running:
                 try:
-                    time.sleep(15)  # mỗi 15–30s
-                    if self.ping_running and self.running and self.sock:
-                        self.send_json({"action": "ping", "data": {"username": username}})
+                    time.sleep(15)  # mỗi 15 giây
+                    if self.ping_running and self.running and self.sock and self.username:
+                        self.send_json({"action": "ping", "data": {"username": self.username}})
                 except Exception as e:
                     print(f"⚠️ Lỗi ping: {e}")
                     break
@@ -157,8 +194,11 @@ class PycTalkClient:
         Dừng gửi ping
         """
         self.ping_running = False
-        if self.ping_thread and self.ping_thread.is_alive():
-            self.ping_thread.join(timeout=0.1)
+        if self.ping_thread and self.ping_thread.is_alive() and self.ping_thread != threading.current_thread():
+            try:
+                self.ping_thread.join(timeout=1.0)  # Tăng timeout
+            except RuntimeError:
+                pass  # Ignore nếu không thể join
             
     def get_user_id(self):
         """

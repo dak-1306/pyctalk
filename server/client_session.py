@@ -1,20 +1,30 @@
 import json
+import socket
 from server.Login_server.RegisterHandle import register
 from server.Login_server.LoginHandle import login
-
-import json
-import socket
+from server.HandleGroupChat.group_handler import GroupHandler
+import time
 
 class ClientSession:
     def __init__(self, client_socket, client_address):
         self.client_socket = client_socket
         self.client_address = client_address
         self.running = True
+        self.group_handler = GroupHandler()
+        # Thiết lập timeout cho socket để tránh treo
+        self.client_socket.settimeout(30.0)  # 30 giây timeout
 
     def run(self):
         print(f"🟢 Client {self.client_address} session started.")
+        self.last_ping_time = time.time()
+        
         try:
             while self.running:
+                # Kiểm tra timeout ping
+                if time.time() - self.last_ping_time > 60:  # 60 giây không ping
+                    self.handle_disconnect("Timeout - Không có ping từ client")
+                    break
+                    
                 # Nhận 4 byte độ dài
                 length_prefix = self.client_socket.recv(4)
                 if not length_prefix:
@@ -22,13 +32,23 @@ class ClientSession:
                     break
 
                 message_length = int.from_bytes(length_prefix, 'big')
+                
+                # Giới hạn kích thước tin nhắn để tránh DoS
+                if message_length > 1024 * 1024:  # 1MB max
+                    self.handle_disconnect("Tin nhắn quá lớn")
+                    break
+                    
                 message_data = b''
-                while len(message_data) < message_length:
-                    chunk = self.client_socket.recv(message_length - len(message_data))
+                bytes_received = 0
+                while bytes_received < message_length:
+                    remaining = message_length - bytes_received
+                    chunk_size = min(remaining, 4096)  # Nhận tối đa 4KB mỗi lần
+                    chunk = self.client_socket.recv(chunk_size)
                     if not chunk:
-                        self.handle_disconnect("Không nhận đủ dữ liệu từ client")
+                        self.handle_disconnect("Kết nối bị đóng khi đang nhận dữ liệu")
                         break
                     message_data += chunk
+                    bytes_received += len(chunk)
 
                 if not message_data:
                     self.handle_disconnect("Không nhận được dữ liệu nào")
@@ -38,6 +58,10 @@ class ClientSession:
 
         except (ConnectionResetError, socket.error) as e:
             self.handle_disconnect(f"Lỗi kết nối: {e}")
+        except socket.timeout:
+            self.handle_disconnect("Timeout - Không có hoạt động trong 30 giây")
+        except Exception as e:
+            self.handle_disconnect(f"Lỗi không mong muốn: {e}")
 
         finally:
             self.cleanup()
@@ -55,18 +79,21 @@ class ClientSession:
 
     def send_response(self, response_dict):
         try:
-            response_json = json.dumps(response_dict).encode()
+            response_json = json.dumps(response_dict, ensure_ascii=False).encode('utf-8')
             response_length = len(response_json).to_bytes(4, 'big')
-            self.client_socket.sendall(response_length + response_json)
+            
+            # Gửi length prefix
+            self.client_socket.sendall(response_length)
+            # Gửi data theo chunks để tránh buffer overflow
+            bytes_sent = 0
+            while bytes_sent < len(response_json):
+                chunk = response_json[bytes_sent:bytes_sent + 8192]  # 8KB chunks
+                self.client_socket.sendall(chunk)
+                bytes_sent += len(chunk)
+                
         except Exception as e:
             print(f"❌ Không gửi được phản hồi cho {self.client_address}: {e}")
             self.running = False  # Tự dừng nếu không gửi được
-
-            
-    def send_response(self, response_dict):
-        response_json = json.dumps(response_dict).encode()
-        response_length = len(response_json).to_bytes(4, 'big')
-        self.client_socket.sendall(response_length + response_json)
 
     def handle_message(self, raw_data):
         try:
@@ -74,6 +101,9 @@ class ClientSession:
             action = data.get("action")
             if action == "ping":
                 print(f"💓 Ping từ {self.client_address}({data['data']['username']})")
+                # Cập nhật last_ping_time nếu có
+                if hasattr(self, 'last_ping_time'):
+                    self.last_ping_time = time.time()
                 return
             elif action == "login":
                 username = data["data"]["username"]
@@ -93,43 +123,68 @@ class ClientSession:
                 print(f"🔒 {self.client_address}({data['data']['username']}) yêu cầu đăng xuất.")
                 self.send_response({"success": True, "message": "Đã đăng xuất."})
                 self.running = False
+                
+            # ===== FRIEND ACTIONS (Not implemented yet) =====
+            elif action == "get_suggestions":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "add_friend":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "get_friends":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "get_friend_requests":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "accept_friend":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "reject_friend":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
+            elif action == "remove_friend":
+                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                
             # ===== GROUP CHAT ACTIONS =====
             elif action == "create_group":
                 group_name = data["data"]["group_name"]
                 created_by = data["data"]["user_id"]
-                result = group_handler.create_group(group_name, created_by)
+                result = self.group_handler.create_group(group_name, created_by)
                 self.send_response(result)
                 
             elif action == "add_member_to_group":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 admin_id = data["data"]["admin_id"]
-                result = group_handler.add_member_to_group(group_id, user_id, admin_id)
+                print(f"🔧 Adding member: group_id={group_id}, user_id={user_id}, admin_id={admin_id}")
+                result = self.group_handler.add_member_to_group(group_id, user_id, admin_id)
+                print(f"🔧 Add member result: {result}")
                 self.send_response(result)
                 
             elif action == "send_group_message":
                 sender_id = data["data"]["sender_id"]
                 group_id = data["data"]["group_id"]
                 content = data["data"]["content"]
-                result = group_handler.send_group_message(sender_id, group_id, content)
+                result = self.group_handler.send_group_message(sender_id, group_id, content)
                 self.send_response(result)
                 
             elif action == "get_group_messages":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 limit = data["data"].get("limit", 50)
-                result = group_handler.get_group_messages(group_id, user_id, limit)
+                result = self.group_handler.get_group_messages(group_id, user_id, limit)
                 self.send_response(result)
                 
             elif action == "get_user_groups":
                 user_id = data["data"]["user_id"]
-                result = group_handler.get_user_groups(user_id)
+                result = self.group_handler.get_user_groups(user_id)
                 self.send_response(result)
                 
             elif action == "get_group_members":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
-                result = group_handler.get_group_members(group_id, user_id)
+                result = self.group_handler.get_group_members(group_id, user_id)
                 self.send_response(result)
                 
             elif action == "send_message":

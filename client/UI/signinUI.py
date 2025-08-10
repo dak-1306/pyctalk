@@ -12,9 +12,12 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_SignInWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.setMinimumSize(310, 450)  # Kích thước tối thiểu
-        MainWindow.setMaximumSize(310, 450)  # Thêm kích thước tối đa = tối thiểu (không cho phóng to)
-        MainWindow.resize(310, 450)
+        MainWindow.setMinimumSize(350, 520)  # Tăng kích thước để chứa thêm elements
+        MainWindow.setMaximumSize(350, 520)
+        MainWindow.resize(350, 520)
+        
+        # Đặt icon và title cho window
+        MainWindow.setWindowTitle("PycTalk - Create Account")
         
         # Lưu reference để tính toán responsive
         self.MainWindow = MainWindow
@@ -22,16 +25,28 @@ class Ui_SignInWindow(object):
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
-        self.widget.setGeometry(QtCore.QRect(10, 10, 290, 410))
+        self.widget.setGeometry(QtCore.QRect(15, 15, 320, 480))
         self.widget.setObjectName("widget")
         self.label_7 = QtWidgets.QLabel(parent=self.widget)
-        self.label_7.setGeometry(QtCore.QRect(0, 0, 290, 410))
+        self.label_7.setGeometry(QtCore.QRect(0, 0, 320, 480))
         self.label_7.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, \n"
-"    stop:0 #b2ebf2, stop:1 #e0f7fa);\n"
-"border-radius: 15px;\n"
+"    stop:0 #667eea, stop:1 #764ba2);\n"
+"border-radius: 20px;\n"
+"box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);\n"
 "")
         self.label_7.setText("")
         self.label_7.setObjectName("label_7")
+        
+        # Tiêu đề Create Account
+        self.titleLabel = QtWidgets.QLabel(parent=self.widget)
+        self.titleLabel.setGeometry(QtCore.QRect(20, 30, 280, 40))
+        font = QtGui.QFont()
+        font.setPointSize(20)
+        font.setBold(True)
+        self.titleLabel.setFont(font)
+        self.titleLabel.setStyleSheet("color: white; font-weight: bold;")
+        self.titleLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.titleLabel.setObjectName("titleLabel")
         self.btnSignin = QtWidgets.QPushButton(parent=self.widget)
         self.btnSignin.setGeometry(QtCore.QRect(20, 330, 250, 40))
         font = QtGui.QFont()

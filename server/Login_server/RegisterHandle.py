@@ -6,15 +6,19 @@ def hash_password_sha256(password: str) -> str:
 
 class RegisterHandler:
     def register_user(self, username: str, password: str, email: str) -> dict:
-        existing_user = db.fetch_one("SELECT * FROM users WHERE Username = %s", (username,))
+        existing_user = db.fetch_one("SELECT * FROM users WHERE username = %s", (username,))
         if existing_user:
             return {"success": False, "message": "Tên người dùng đã tồn tại."}
+
+        existing_email = db.fetch_one("SELECT * FROM users WHERE email = %s", (email,))
+        if existing_email:
+            return {"success": False, "message": "Email đã được sử dụng."}
 
         hashed_password = hash_password_sha256(password)
 
         try:
             db.execute(
-                "INSERT INTO users (Username, Password_hash, Email) VALUES (%s, %s, %s)",
+                "INSERT INTO users (username, password_hash, email) VALUES (%s, %s, %s)",
                 (username, hashed_password, email)
             )
             return {"success": True, "message": "Đăng ký thành công."}

@@ -1,6 +1,10 @@
 import json
+import threading
+import time
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel, QListWidget, QMessageBox, QInputDialog
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QProgressBar
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 
 class GroupChatWindow(QDialog):
     def __init__(self, client, user_id, username):
@@ -9,6 +13,10 @@ class GroupChatWindow(QDialog):
         self.user_id = user_id
         self.username = username
         self.current_group = None
+        
+        # Threading management
+        self.message_sender_thread = None
+        
         self.setupUI()
         self.load_user_groups()
         
@@ -60,51 +68,6 @@ class GroupChatWindow(QDialog):
         self.group_info_label.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Weight.Bold))
         self.group_info_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         
-        # Messages area
-        self.messages_area = QTextEdit()
-        self.messages_area.setReadOnly(True)
-        self.messages_area.setStyleSheet("""
-            QTextEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                padding: 10px;
-            }
-        """)
-        
-        # Message input area
-        input_layout = QHBoxLayout()
-        
-        self.message_input = QLineEdit()
-        self.message_input.setPlaceholderText("Nhập tin nhắn...")
-        self.message_input.returnPressed.connect(self.send_message)
-        self.message_input.setEnabled(False)
-        
-        send_btn = QPushButton("Gửi")
-        send_btn.clicked.connect(self.send_message)
-        send_btn.setEnabled(False)
-        send_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """)
-        
-        self.send_btn = send_btn
-        
-        input_layout.addWidget(self.message_input)
-        input_layout.addWidget(send_btn)
-        
         # Group actions
         actions_layout = QHBoxLayout()
         
@@ -129,6 +92,7 @@ class GroupChatWindow(QDialog):
         
         right_panel.addWidget(self.group_info_label)
         right_panel.addWidget(self.messages_area)
+        right_panel.addWidget(self.send_progress)  # Add progress bar
         right_panel.addLayout(input_layout)
         right_panel.addLayout(actions_layout)
         
@@ -138,23 +102,34 @@ class GroupChatWindow(QDialog):
         
         self.setLayout(main_layout)
     
+    def closeEvent(self, event):
+        """Cleanup khi đóng window"""
+        if self.message_sender_thread and self.message_sender_thread.isRunning():
+            self.message_sender_thread.quit()
+            self.message_sender_thread.wait(1000)  # Wait 1 second
+        super().closeEvent(event)
+    
     def load_user_groups(self):
         """Load danh sách nhóm của user"""
-        request = {
-            "action": "get_user_groups",
-            "data": {"user_id": self.user_id}
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            self.groups_list.clear()
-            for group in response.get("groups", []):
-                item_text = f"{group['group_name']} (ID: {group['group_id']})"
-                item = QtWidgets.QListWidgetItem(item_text)
-                item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
-                self.groups_list.addItem(item)
-        else:
-            QMessageBox.warning(self, "Lỗi", "Không thể tải danh sách nhóm")
+        try:
+            request = {
+                "action": "get_user_groups",
+                "data": {"user_id": self.user_id}
+            }
+            
+            response = self.client.send_json(request)
+            if response and response.get("success"):
+                self.groups_list.clear()
+                for group in response.get("groups", []):
+                    item_text = f"{group['group_name']} (ID: {group['group_id']})"
+                    item = QtWidgets.QListWidgetItem(item_text)
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
+                    self.groups_list.addItem(item)
+            else:
+                error_msg = response.get("message", "Không thể tải danh sách nhóm") if response else "Không có phản hồi từ server"
+                QMessageBox.warning(self, "Lỗi", error_msg)
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Lỗi kết nối: {str(e)}")
     
     def select_group(self, item):
         """Chọn nhóm để chat"""
@@ -168,77 +143,7 @@ class GroupChatWindow(QDialog):
         self.add_member_btn.setEnabled(True)
         self.view_members_btn.setEnabled(True)
         self.refresh_btn.setEnabled(True)
-        
-        # Load messages
-        self.load_group_messages()
-    
-    def load_group_messages(self):
-        """Load tin nhắn của nhóm"""
-        if not self.current_group:
-            return
-            
-        request = {
-            "action": "get_group_messages",
-            "data": {
-                "group_id": self.current_group["group_id"],
-                "user_id": self.user_id,
-                "limit": 50
-            }
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            self.messages_area.clear()
-            messages = response.get("messages", [])
-            
-            # Reverse để hiển thị tin nhắn cũ nhất trước
-            messages.reverse()
-            
-            for msg in messages:
-                time_str = msg["time_send"].split("T")[1].split(".")[0] if msg["time_send"] else "Unknown"
-                message_text = f"[{time_str}] {msg['sender_name']}: {msg['content']}"
-                self.messages_area.append(message_text)
-            
-            # Scroll to bottom
-            scrollbar = self.messages_area.verticalScrollBar()
-            scrollbar.setValue(scrollbar.maximum())
-        else:
-            QMessageBox.warning(self, "Lỗi", "Không thể tải tin nhắn")
-    
-    def send_message(self):
-        """Gửi tin nhắn"""
-        if not self.current_group:
-            QMessageBox.warning(self, "Lỗi", "Vui lòng chọn nhóm trước")
-            return
-            
-        message_content = self.message_input.text().strip()
-        if not message_content:
-            return
-        
-        request = {
-            "action": "send_group_message",
-            "data": {
-                "sender_id": self.user_id,
-                "group_id": self.current_group["group_id"],
-                "content": message_content
-            }
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            self.message_input.clear()
-            # Add message to display immediately
-            message_data = response.get("message_data", {})
-            time_str = message_data.get("time_send", "").split("T")[1].split(".")[0] if message_data.get("time_send") else "Now"
-            message_text = f"[{time_str}] {self.username}: {message_content}"
-            self.messages_area.append(message_text)
-            
-            # Scroll to bottom
-            scrollbar = self.messages_area.verticalScrollBar()
-            scrollbar.setValue(scrollbar.maximum())
-        else:
-            QMessageBox.warning(self, "Lỗi", response.get("message", "Không thể gửi tin nhắn"))
-    
+         
     def create_new_group(self):
         """Tạo nhóm mới"""
         group_name, ok = QInputDialog.getText(self, "Tạo nhóm mới", "Tên nhóm:")
@@ -246,20 +151,25 @@ class GroupChatWindow(QDialog):
         if not ok or not group_name.strip():
             return
             
-        request = {
-            "action": "create_group",
-            "data": {
-                "group_name": group_name.strip(),
-                "user_id": self.user_id
+        try:
+            request = {
+                "action": "create_group",
+                "data": {
+                    "group_name": group_name.strip(),
+                    "user_id": self.user_id
+                }
             }
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công!")
-            self.load_user_groups()  # Reload groups list
-        else:
-            QMessageBox.warning(self, "Lỗi", response.get("message", "Không thể tạo nhóm"))
+            
+            response = self.client.send_json(request)
+            if response and response.get("success"):
+                QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công!")
+                self.load_user_groups()  # Reload groups list
+            else:
+                error_msg = response.get("message", "Không thể tạo nhóm") if response else "Không nhận được phản hồi từ server"
+                QMessageBox.warning(self, "Lỗi", error_msg)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Lỗi khi tạo nhóm: {e}")
     
     def add_member_dialog(self):
         """Dialog thêm thành viên"""
@@ -277,46 +187,50 @@ class GroupChatWindow(QDialog):
             QMessageBox.warning(self, "Lỗi", "ID người dùng phải là số")
             return
             
-        request = {
-            "action": "add_member_to_group",
-            "data": {
-                "group_id": self.current_group["group_id"],
-                "user_id": add_user_id,
-                "admin_id": self.user_id
+        try:
+            request = {
+                "action": "add_member_to_group",
+                "data": {
+                    "group_id": self.current_group["group_id"],
+                    "user_id": add_user_id,
+                    "admin_id": self.user_id
+                }
             }
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            QMessageBox.information(self, "Thành công", "Đã thêm thành viên thành công!")
-        else:
-            QMessageBox.warning(self, "Lỗi", response.get("message", "Không thể thêm thành viên"))
+            
+            response = self.client.send_json(request)
+            if response and response.get("success"):
+                QMessageBox.information(self, "Thành công", "Đã thêm thành viên thành công!")
+            else:
+                error_msg = response.get("message", "Không thể thêm thành viên") if response else "Không nhận được phản hồi từ server"
+                QMessageBox.warning(self, "Lỗi", error_msg)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Lỗi khi thêm thành viên: {e}")
     
     def view_members(self):
         """Xem danh sách thành viên"""
         if not self.current_group:
             return
-            
-        request = {
-            "action": "get_group_members",
-            "data": {
-                "group_id": self.current_group["group_id"],
-                "user_id": self.user_id
+        try:
+            request = {
+                "action": "get_group_members",
+                "data": {
+                    "group_id": self.current_group["group_id"],
+                    "user_id": self.user_id
+                }
             }
-        }
-        
-        response = self.client.send_json(request)
-        if response and response.get("success"):
-            members = response.get("members", [])
-            members_text = "Thành viên nhóm:\\n\\n"
-            for member in members:
-                members_text += f"• {member['username']} (ID: {member['user_id']})\\n"
             
-            QMessageBox.information(self, f"Thành viên nhóm {self.current_group['group_name']}", members_text)
-        else:
-            QMessageBox.warning(self, "Lỗi", "Không thể tải danh sách thành viên")
-    
-    def refresh_messages(self):
-        """Làm mới tin nhắn"""
-        if self.current_group:
-            self.load_group_messages()
+            response = self.client.send_json(request)
+            if response and response.get("success"):
+                members = response.get("members", [])
+                members_text = "Thành viên nhóm:\n\n"
+                for member in members:
+                    members_text += f"• {member['username']} (ID: {member['user_id']})\n"
+                
+                QMessageBox.information(self, f"Thành viên nhóm {self.current_group['group_name']}", members_text)
+            else:
+                error_msg = response.get("message", "Không thể tải danh sách thành viên") if response else "Không nhận được phản hồi từ server"
+                QMessageBox.warning(self, "Lỗi", error_msg)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Lỗi khi tải danh sách thành viên: {e}")

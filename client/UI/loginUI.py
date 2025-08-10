@@ -12,9 +12,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_LoginWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.setMinimumSize(310, 450)  # Kích thước tối thiểu
-        MainWindow.setMaximumSize(310, 450)  # Thêm kích thước tối đa = tối thiểu (không cho phóng to)
-        MainWindow.resize(310, 450)
+        MainWindow.setMinimumSize(280, 350)  # Kích thước nhỏ gọn như điện thoại
+        MainWindow.setMaximumSize(280, 350)
+        MainWindow.resize(280, 350)
         
         # Lưu reference để tính toán responsive
         self.MainWindow = MainWindow
@@ -22,13 +22,13 @@ class Ui_LoginWindow(object):
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.widget = QtWidgets.QWidget(parent=self.centralwidget)
-        self.widget.setGeometry(QtCore.QRect(10, 10, 290, 410))
+        self.widget.setGeometry(QtCore.QRect(10, 10, 260, 330))
         self.widget.setObjectName("widget")
         self.label = QtWidgets.QLabel(parent=self.widget)
-        self.label.setGeometry(QtCore.QRect(0, 0, 290, 410))
+        self.label.setGeometry(QtCore.QRect(0, 0, 260, 330))
         self.label.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, \n"
 "    stop:0 #b2ebf2, stop:1 #e0f7fa);\n"
-"border-radius: 15px;\n"
+"border-radius: 12px;\n"
 "")
         self.label.setText("")
         self.label.setObjectName("label")
