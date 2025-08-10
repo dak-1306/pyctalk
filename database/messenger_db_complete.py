@@ -1,4 +1,4 @@
-# Correct Messenger Database Integration - Fixed Column Names
+# Complete Messenger Database Integration
 import sys
 import os
 from datetime import datetime
@@ -13,7 +13,7 @@ except ImportError as e:
     MySQLDatabase = None
 
 class MessengerDatabase:
-    """Class xử lý database cho chức năng Messenger với column names đúng"""
+    """Class xử lý database cho chức năng Messenger"""
     
     def __init__(self):
         if not MySQLDatabase:
@@ -25,7 +25,7 @@ class MessengerDatabase:
     def get_user_conversations(self, user_id):
         """Lấy danh sách cuộc trò chuyện của user"""
         try:
-            # Query với column names đúng từ schema
+            # Query đơn giản để lấy conversations
             query = """
             SELECT DISTINCT
                 CASE 
@@ -37,12 +37,12 @@ class MessengerDatabase:
                     ELSE sender.username
                 END as friend_name,
                 pm.content as last_message,
-                pm.time_send as last_message_time
+                pm.timestamp as last_message_time
             FROM private_messages pm
             JOIN users sender ON pm.sender_id = sender.id
             JOIN users receiver ON pm.receiver_id = receiver.id
             WHERE pm.sender_id = %s OR pm.receiver_id = %s
-            ORDER BY pm.time_send DESC
+            ORDER BY pm.timestamp DESC
             LIMIT 20
             """
             
@@ -75,15 +75,15 @@ class MessengerDatabase:
         try:
             query = """
             SELECT 
-                message_private_id as id,
+                id,
                 sender_id,
                 receiver_id,
                 content,
-                time_send as timestamp
+                timestamp
             FROM private_messages
             WHERE (sender_id = %s AND receiver_id = %s)
                OR (sender_id = %s AND receiver_id = %s)
-            ORDER BY time_send ASC
+            ORDER BY timestamp ASC
             LIMIT %s
             """
             
@@ -111,7 +111,7 @@ class MessengerDatabase:
         """Gửi tin nhắn mới"""
         try:
             query = """
-            INSERT INTO private_messages (sender_id, receiver_id, content, time_send)
+            INSERT INTO private_messages (sender_id, receiver_id, content, timestamp)
             VALUES (%s, %s, %s, %s)
             """
             
@@ -175,7 +175,7 @@ class MessengerDatabase:
         try:
             print("🔧 Creating sample data...")
             
-            # Tạo users mẫu (chỉ thêm nếu chưa có)
+            # Tạo users mẫu
             users = [
                 ('nguyenvana', 'hashed_password_1', 'a@example.com'),
                 ('tranthib', 'hashed_password_2', 'b@example.com'),
@@ -205,7 +205,7 @@ class MessengerDatabase:
             
             print("✅ Sample friendships created")
             
-            # Tạo tin nhắn mẫu với column name đúng
+            # Tạo tin nhắn mẫu
             sample_messages = [
                 (1, 2, "Chào bạn! Bạn có khỏe không?"),
                 (2, 1, "Chào! Mình khỏe, cảm ơn bạn. Còn bạn thì sao?"),
@@ -222,7 +222,7 @@ class MessengerDatabase:
             
             for sender, receiver, content in sample_messages:
                 query = """
-                INSERT INTO private_messages (sender_id, receiver_id, content, time_send)
+                INSERT INTO private_messages (sender_id, receiver_id, content, timestamp)
                 VALUES (%s, %s, %s, NOW())
                 """
                 self.db.execute(query, (sender, receiver, content))
@@ -270,12 +270,6 @@ def test_messenger_db():
         print("\n📤 Testing send_message...")
         result = messenger_db.send_message(1, 2, "Test message from Python!")
         print(f"  Send result: {result}")
-        
-        # Test lại conversations sau khi gửi tin nhắn
-        print("\n📋 Re-testing get_user_conversations after sending message...")
-        conversations = messenger_db.get_user_conversations(1)
-        for conv in conversations:
-            print(f"  - {conv['friend_name']}: {conv['last_message']}")
         
         # Test get friends
         print("\n👥 Testing get_user_friends...")
