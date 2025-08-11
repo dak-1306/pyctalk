@@ -1,4 +1,4 @@
-# Correct Messenger Database Integration - Fixed Column Names
+# Fixed Messenger Database Integration
 import sys
 import os
 from datetime import datetime
@@ -13,7 +13,7 @@ except ImportError as e:
     MySQLDatabase = None
 
 class MessengerDatabase:
-    """Class xử lý database cho chức năng Messenger với column names đúng"""
+    """Class xử lý database cho chức năng Messenger"""
     
     def __init__(self):
         if not MySQLDatabase:
@@ -25,7 +25,7 @@ class MessengerDatabase:
     def get_user_conversations(self, user_id):
         """Lấy danh sách cuộc trò chuyện của user"""
         try:
-            # Query với column names đúng từ schema
+            # Query đơn giản để lấy conversations
             query = """
             SELECT DISTINCT
                 CASE 
@@ -37,16 +37,16 @@ class MessengerDatabase:
                     ELSE sender.username
                 END as friend_name,
                 pm.content as last_message,
-                pm.time_send as last_message_time
+                pm.timestamp as last_message_time
             FROM private_messages pm
             JOIN users sender ON pm.sender_id = sender.id
             JOIN users receiver ON pm.receiver_id = receiver.id
             WHERE pm.sender_id = %s OR pm.receiver_id = %s
-            ORDER BY pm.time_send DESC
+            ORDER BY pm.timestamp DESC
             LIMIT 20
             """
             
-            result = self.db.fetch_all(query, (user_id, user_id, user_id, user_id))
+            result = self.db.execute_query(query, (user_id, user_id, user_id, user_id))
             
             # Loại bỏ duplicate conversations
             seen_friends = set()
@@ -75,19 +75,19 @@ class MessengerDatabase:
         try:
             query = """
             SELECT 
-                message_private_id as id,
+                id,
                 sender_id,
                 receiver_id,
                 content,
-                time_send as timestamp
+                timestamp
             FROM private_messages
             WHERE (sender_id = %s AND receiver_id = %s)
                OR (sender_id = %s AND receiver_id = %s)
-            ORDER BY time_send ASC
+            ORDER BY timestamp ASC
             LIMIT %s
             """
             
-            result = self.db.fetch_all(query, (user_id, friend_id, friend_id, user_id, limit))
+            result = self.db.execute_query(query, (user_id, friend_id, friend_id, user_id, limit))
             
             messages = []
             for msg in result:
@@ -111,21 +111,26 @@ class MessengerDatabase:
         """Gửi tin nhắn mới"""
         try:
             query = """
-            INSERT INTO private_messages (sender_id, receiver_id, content, time_send)
+            INSERT INTO private_messages (sender_id, receiver_id, content, timestamp)
             VALUES (%s, %s, %s, %s)
             """
             
             timestamp = datetime.now()
             
-            # Sử dụng execute cho INSERT
-            self.db.execute(query, (sender_id, receiver_id, content, timestamp))
+            result = self.db.execute_query(query, (sender_id, receiver_id, content, timestamp))
             
-            print(f"✅ Message sent from {sender_id} to {receiver_id}: {content[:30]}...")
-            return {
-                'success': True,
-                'timestamp': timestamp,
-                'message_id': self.db.cursor.lastrowid if hasattr(self.db.cursor, 'lastrowid') else None
-            }
+            if result is not None:  # Query thành công
+                print(f"✅ Message sent from {sender_id} to {receiver_id}: {content[:30]}...")
+                return {
+                    'success': True,
+                    'timestamp': timestamp,
+                    'message_id': self.db.cursor.lastrowid if hasattr(self.db.cursor, 'lastrowid') else None
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'Failed to insert message'
+                }
                 
         except Exception as e:
             print(f"Error sending message: {e}")
@@ -154,7 +159,7 @@ class MessengerDatabase:
             ORDER BY friend_name
             """
             
-            result = self.db.fetch_all(query, (user_id, user_id, user_id, user_id))
+            result = self.db.execute_query(query, (user_id, user_id, user_id, user_id))
             
             friends = []
             for friend in result:
@@ -175,7 +180,7 @@ class MessengerDatabase:
         try:
             print("🔧 Creating sample data...")
             
-            # Tạo users mẫu (chỉ thêm nếu chưa có)
+            # Tạo users mẫu
             users = [
                 ('nguyenvana', 'hashed_password_1', 'a@example.com'),
                 ('tranthib', 'hashed_password_2', 'b@example.com'),
@@ -186,7 +191,7 @@ class MessengerDatabase:
             
             for username, password, email in users:
                 query = "INSERT IGNORE INTO users (username, password_hash, email) VALUES (%s, %s, %s)"
-                self.db.execute(query, (username, password, email))
+                self.db.execute_query(query, (username, password, email))
             
             print("✅ Sample users created")
             
@@ -201,11 +206,11 @@ class MessengerDatabase:
                     user1, user2 = user2, user1
                 
                 query = "INSERT IGNORE INTO friends (user1_id, user2_id) VALUES (%s, %s)"
-                self.db.execute(query, (user1, user2))
+                self.db.execute_query(query, (user1, user2))
             
             print("✅ Sample friendships created")
             
-            # Tạo tin nhắn mẫu với column name đúng
+            # Tạo tin nhắn mẫu
             sample_messages = [
                 (1, 2, "Chào bạn! Bạn có khỏe không?"),
                 (2, 1, "Chào! Mình khỏe, cảm ơn bạn. Còn bạn thì sao?"),
@@ -222,10 +227,10 @@ class MessengerDatabase:
             
             for sender, receiver, content in sample_messages:
                 query = """
-                INSERT INTO private_messages (sender_id, receiver_id, content, time_send)
+                INSERT INTO private_messages (sender_id, receiver_id, content, timestamp)
                 VALUES (%s, %s, %s, NOW())
                 """
-                self.db.execute(query, (sender, receiver, content))
+                self.db.execute_query(query, (sender, receiver, content))
             
             print("✅ Sample messages created")
             print("🎉 Sample data creation completed!")
@@ -238,8 +243,8 @@ class MessengerDatabase:
     
     def close(self):
         """Đóng kết nối database"""
-        if hasattr(self.db, 'disconnect'):
-            self.db.disconnect()
+        if hasattr(self.db, 'close'):
+            self.db.close()
 
 # Test function
 def test_messenger_db():
@@ -270,12 +275,6 @@ def test_messenger_db():
         print("\n📤 Testing send_message...")
         result = messenger_db.send_message(1, 2, "Test message from Python!")
         print(f"  Send result: {result}")
-        
-        # Test lại conversations sau khi gửi tin nhắn
-        print("\n📋 Re-testing get_user_conversations after sending message...")
-        conversations = messenger_db.get_user_conversations(1)
-        for conv in conversations:
-            print(f"  - {conv['friend_name']}: {conv['last_message']}")
         
         # Test get friends
         print("\n👥 Testing get_user_friends...")
