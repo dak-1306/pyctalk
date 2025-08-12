@@ -169,7 +169,7 @@ class PycTalkClient:
         finally:
             self.disconnect()
 
-    def start_ping(self):
+    def start_ping(self, username=None):
         # Gửi ping đều đặn để giữ kết nối
         def ping_loop():
             while self.ping_running and self.running:
@@ -184,7 +184,8 @@ class PycTalkClient:
         # Nếu đã có thread ping đang chạy thì dừng nó trước
         if self.ping_running:
             self.stop_ping()
-        
+        if username is not None:
+            self.username = username
         self.ping_running = True
         self.ping_thread = threading.Thread(target=ping_loop, daemon=True)
         self.ping_thread.start()
