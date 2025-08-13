@@ -36,19 +36,19 @@ class GroupHandler:
     def add_member_to_group(self, group_id: int, user_id: int, added_by: int) -> dict:
         """Thêm thành viên vào nhóm"""
         try:
-            # Kiểm tra người thêm có phải thành viên nhóm không
-            check_member = db.fetch_one(
-                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
-                (group_id, added_by)
+        # Kiểm tra người thêm có phải là admin (người tạo nhóm) không
+            group_info = db.fetch_one(
+                "SELECT created_by FROM group_chat WHERE group_id = %s",
+                (group_id,)
             )
-            if not check_member:
-                return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            
+            if not group_info or group_info["created_by"] != added_by:
+                return {"success": False, "message": "Chỉ admin mới được thêm thành viên"}
+
             # Kiểm tra user có tồn tại không
             user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
             if not user_exists:
                 return {"success": False, "message": "Người dùng không tồn tại"}
-            
+
             # Kiểm tra đã là thành viên chưa
             already_member = db.fetch_one(
                 "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
@@ -56,24 +56,23 @@ class GroupHandler:
             )
             if already_member:
                 return {"success": False, "message": "Người dùng đã là thành viên của nhóm"}
-            
+
             # Thêm thành viên
             db.execute(
                 "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                 (group_id, user_id)
             )
-            
+
             # Lấy thông tin người dùng vừa thêm
             user_info = db.fetch_one(
                 "SELECT username FROM users WHERE id = %s", 
                 (user_id,)
             )
-            
+
             return {
                 "success": True,
                 "message": f"Đã thêm {user_info['username']} vào nhóm"
             }
-            
         except Exception as e:
             return {"success": False, "message": f"Lỗi thêm thành viên: {str(e)}"}
 
@@ -87,13 +86,16 @@ class GroupHandler:
             )
             if not member_check:
                 return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            
+            # Kiểm tra nội dung tin nhắn
+            if not content or len(content.strip()) == 0:
+                return {"success": False, "message": "Nội dung tin nhắn không được để trống"}
+            if len(content) > 1000:
+                return {"success": False, "message": "Nội dung tin nhắn quá dài (tối đa 1000 ký tự)"}
             # Lưu tin nhắn vào database
             db.execute(
                 "INSERT INTO group_messages (sender_id, group_id, content) VALUES (%s, %s, %s)",
                 (sender_id, group_id, content)
             )
-            
             # Lấy thông tin tin nhắn vừa gửi
             message = db.fetch_one(
                 """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, 
@@ -104,10 +106,8 @@ class GroupHandler:
                    ORDER BY gm.message_group_id DESC LIMIT 1""",
                 (sender_id, group_id)
             )
-            
             if not message:
                 return {"success": False, "message": "Không thể lấy thông tin tin nhắn"}
-            
             return {
                 "success": True,
                 "message": "Gửi tin nhắn thành công",
@@ -120,11 +120,12 @@ class GroupHandler:
                     "sender_name": message["sender_name"]
                 }
             }
-            
         except Exception as e:
+            import traceback
+            print("[GroupHandler] Lỗi gửi tin nhắn:", traceback.format_exc())
             return {"success": False, "message": f"Lỗi gửi tin nhắn: {str(e)}"}
 
-    def get_group_messages(self, group_id: int, user_id: int, limit: int = 50) -> dict:
+    def get_group_messages(self, group_id: int, user_id: int, limit: int = 50, offset: int = 0) -> dict:
         """Lấy tin nhắn nhóm"""
         try:
             # Kiểm tra thành viên nhóm
@@ -134,7 +135,6 @@ class GroupHandler:
             )
             if not member_check:
                 return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            
             # Lấy tin nhắn
             messages = db.fetch_all(
                 """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, 
@@ -142,10 +142,9 @@ class GroupHandler:
                    FROM group_messages gm 
                    JOIN users u ON gm.sender_id = u.id 
                    WHERE gm.group_id = %s 
-                   ORDER BY gm.time_send DESC LIMIT %s""",
-                (group_id, limit)
+                   ORDER BY gm.time_send DESC LIMIT %s OFFSET %s""",
+                (group_id, limit, offset)
             )
-            
             # Chuyển đổi datetime thành string
             message_list = []
             for msg in messages:
@@ -157,12 +156,10 @@ class GroupHandler:
                     "time_send": msg["time_send"].isoformat() if msg["time_send"] else None,
                     "sender_name": msg["sender_name"]
                 })
-            
             return {
                 "success": True,
                 "messages": message_list[::-1]  # Đảo ngược để tin nhắn cũ lên trước
             }
-            
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy tin nhắn: {str(e)}"}
 
@@ -173,7 +170,6 @@ class GroupHandler:
             user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
             if not user_exists:
                 return {"success": False, "message": "User không tồn tại"}
-                
             groups = db.fetch_all(
                 """SELECT gc.group_id, gc.group_name, gc.created_by, u.username as creator_name
                    FROM group_chat gc
@@ -182,11 +178,9 @@ class GroupHandler:
                    WHERE gm.user_id = %s""",
                 (user_id,)
             )
-            
             # Đảm bảo groups không phải None
             if groups is None:
                 groups = []
-            
             return {
                 "success": True,
                 "groups": [
@@ -199,7 +193,6 @@ class GroupHandler:
                     for group in groups
                 ]
             }
-            
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy danh sách nhóm: {str(e)}"}
 

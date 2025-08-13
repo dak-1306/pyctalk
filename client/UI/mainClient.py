@@ -8,7 +8,7 @@
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from Login.logout import LogoutHandler
-
+from Group_chat.group_chat_window import GroupChatWindow
 class Ui_MainWindow(object):
     def __init__(self, username, client, main_window):
         self.username = username
@@ -113,8 +113,6 @@ class Ui_MainWindow(object):
         self.logout_handler.logout(self.username)
     
     def on_group_chat_clicked(self):
-        from Group_chat.group import GroupChatWindow
-        
         if not self.client.is_logged_in():
             QtWidgets.QMessageBox.warning(
                 self.main_window, 

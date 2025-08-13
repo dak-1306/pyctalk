@@ -132,7 +132,13 @@ class ClientSession:
                 self.send_response({"success": False, "message": "Friend feature chưa được implement"})
                 
             elif action == "get_friends":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                user_id = data["data"].get("user_id")
+                # TODO: Lấy danh sách bạn bè từ DB, hiện trả về mẫu
+                friends = [
+                    {"user_id": 2, "username": "alice"},
+                    {"user_id": 3, "username": "bob"}
+                ]
+                self.send_response({"success": True, "friends": friends})
                 
             elif action == "get_friend_requests":
                 self.send_response({"success": False, "message": "Friend feature chưa được implement"})
@@ -173,7 +179,8 @@ class ClientSession:
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 limit = data["data"].get("limit", 50)
-                result = self.group_handler.get_group_messages(group_id, user_id, limit)
+                offset = data["data"].get("offset", 0)
+                result = self.group_handler.get_group_messages(group_id, user_id, limit, offset)
                 self.send_response(result)
                 
             elif action == "get_user_groups":
@@ -191,7 +198,12 @@ class ClientSession:
                 pass  # handle_send_message(data)
             else:
                 print(f"❓ Unknown action from {self.client_address}: {action}")
+                self.send_response({"success": False, "message": f"Unknown action: {action}"})
 
 
         except json.JSONDecodeError:
             print(f"❌ Invalid JSON from {self.client_address}")
+            self.send_response({"success": False, "message": "Invalid JSON"})
+        except Exception as e:
+            print(f"❌ Lỗi xử lý message từ {self.client_address}: {e}")
+            self.send_response({"success": False, "message": f"Server error: {e}"})
