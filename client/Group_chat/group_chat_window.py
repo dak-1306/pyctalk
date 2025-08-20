@@ -110,3 +110,84 @@ class GroupChatWindow(QDialog):
 
     def _on_message_error(self, error_message):
         QMessageBox.warning(self, "Lỗi", error_message)
+        self.message_input.setFocus()
+
+    def create_new_group(self):
+        group_name, ok = QInputDialog.getText(self, "Tạo nhóm mới", "Tên nhóm:")
+        if not ok or not group_name.strip():
+            return
+        response = self.api_client.send_request("create_group", {
+            "group_name": group_name.strip(),
+            "user_id": self.user_id
+        })
+        if not response:
+            QMessageBox.critical(self, "Lỗi", "Không nhận được phản hồi từ server!")
+            return
+        if response.get("success"):
+            QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công!")
+            self.load_user_groups()
+        else:
+            QMessageBox.warning(self, "Lỗi", response.get("message", "Không thể tạo nhóm"))
+
+    def add_member_dialog(self):
+        if not self.current_group:
+            return
+        response = self.api_client.send_request("get_friends", {"user_id": self.user_id})
+        if not response:
+            QMessageBox.critical(self, "Lỗi", "Không nhận được phản hồi từ server!")
+            return
+        friends = response.get("friends", []) if response.get("success") else []
+        if not friends:
+            QMessageBox.warning(self, "Lỗi", "Không có bạn bè để thêm")
+            return
+        friend_names = [f"{f['username']} (ID: {f['user_id']})" for f in friends]
+        selected, ok = QInputDialog.getItem(self, "Thêm thành viên", "Chọn bạn để thêm:", friend_names, 0, False)
+        if not ok or not selected:
+            return
+        match = re.search(r'ID: (\d+)', selected)
+        if not match:
+            QMessageBox.warning(self, "Lỗi", "Không thể lấy ID bạn bè")
+            return
+        add_user_id = int(match.group(1))
+        response = self.api_client.send_request("add_member_to_group", {
+            "group_id": self.current_group["group_id"],
+            "user_id": add_user_id,
+            "admin_id": self.user_id
+        })
+        if not response:
+            QMessageBox.critical(self, "Lỗi", "Không nhận được phản hồi từ server!")
+            return
+        if response.get("success"):
+            QMessageBox.information(self, "Thành công", "Đã thêm thành viên thành công!")
+            self.view_members()
+        else:
+            QMessageBox.critical(self, "Lỗi quyền", response.get("message", "Không thể thêm thành viên"))
+
+    def view_members(self):
+        if not self.current_group:
+            return
+        response = self.api_client.send_request("get_group_members", {
+            "group_id": self.current_group["group_id"],
+            "user_id": self.user_id
+        })
+        if not response:
+            QMessageBox.critical(self, "Lỗi", "Không nhận được phản hồi từ server!")
+            return
+        if response.get("success"):
+            members_text = "Thành viên nhóm:\n\n"
+            for m in response.get("members", []):
+                members_text += f"• {m['username']} (ID: {m['user_id']})\n"
+            QMessageBox.information(self, f"Thành viên nhóm {self.current_group['group_name']}", members_text)
+        else:
+            QMessageBox.warning(self, "Lỗi", response.get("message", "Không thể tải danh sách thành viên"))
+
+    def refresh_messages(self):
+        if self.current_group:
+            self.message_offset = 0
+            self.load_group_messages(offset=0, limit=50)
+
+    def load_more_messages(self):
+        if not self.current_group:
+            return
+        self.message_offset = getattr(self, 'message_offset', 0) + 50
+        self.load_group_messages(offset=self.message_offset, limit=50)
