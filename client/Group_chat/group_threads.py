@@ -1,9 +1,9 @@
 from PyQt6.QtCore import QThread, pyqtSignal
 
-class MessageSenderThread(QThread):
-    """Thread để gửi tin nhắn async, không block UI"""
-    message_sent = pyqtSignal(dict)  # Signal khi gửi thành công
-    error_occurred = pyqtSignal(str)  # Signal khi có lỗi
+class GroupMessageSenderThread(QThread):
+    """Thread gửi tin nhắn nhóm (không block UI)"""
+    message_sent = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
 
     def __init__(self, client, request_data):
         super().__init__()

@@ -2,6 +2,51 @@ from database.db import db
 from datetime import datetime
 
 class GroupHandler:
+    def create_group_with_members(self, group_name: str, created_by: int, member_ids: list) -> dict:
+        """Tạo nhóm mới và thêm nhiều thành viên"""
+        try:
+            # Tạo nhóm
+            db.execute(
+                "INSERT INTO group_chat (group_name, created_by) VALUES (%s, %s)",
+                (group_name, created_by)
+            )
+            # Lấy ID nhóm vừa tạo
+            result = db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
+            group_id = result["group_id"]
+            # Thêm người tạo vào nhóm
+            db.execute(
+                "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
+                (group_id, created_by)
+            )
+            # Thêm các thành viên được chọn
+            added_count = 0
+            for uid in member_ids:
+                # Không thêm trùng người tạo
+                if int(uid) == int(created_by):
+                    continue
+                # Kiểm tra user tồn tại
+                user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (uid,))
+                if not user_exists:
+                    continue
+                # Kiểm tra đã là thành viên chưa
+                already_member = db.fetch_one(
+                    "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                    (group_id, uid)
+                )
+                if already_member:
+                    continue
+                db.execute(
+                    "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
+                    (group_id, uid)
+                )
+                added_count += 1
+            return {
+                "success": True,
+                "message": f"Tạo nhóm '{group_name}' thành công, đã thêm {added_count} thành viên.",
+                "group_id": group_id
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Lỗi tạo nhóm: {str(e)}"}
     def __init__(self):
         pass
     
@@ -166,6 +211,11 @@ class GroupHandler:
     def get_user_groups(self, user_id: int) -> dict:
         """Lấy danh sách nhóm của user"""
         try:
+            # Ép kiểu user_id về int nếu là string
+            try:
+                user_id = int(user_id)
+            except Exception:
+                return {"success": False, "message": "user_id không hợp lệ"}
             # Kiểm tra user tồn tại
             user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
             if not user_exists:

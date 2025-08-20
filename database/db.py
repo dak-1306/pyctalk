@@ -3,7 +3,7 @@ import mysql.connector
 from mysql.connector import Error
 
 class MySQLDatabase:
-    def __init__(self, host="localhost", user="root", password="", database="pyctalk"):
+    def __init__(self, host="localhost", user="root", password="dang13062005", database="pyctalk"):
         self.host = host
         self.user = user
         self.password = password

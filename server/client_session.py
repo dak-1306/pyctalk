@@ -153,6 +153,13 @@ class ClientSession:
                 self.send_response({"success": False, "message": "Friend feature chưa được implement"})
                 
             # ===== GROUP CHAT ACTIONS =====
+            elif action == "create_group_with_members":
+                group_name = data["data"].get("group_name")
+                created_by = data["data"].get("user_id")
+                member_ids = data["data"].get("member_ids", [])
+                result = self.group_handler.create_group_with_members(group_name, created_by, member_ids)
+                self.send_response(result)
+                
             elif action == "create_group":
                 group_name = data["data"]["group_name"]
                 created_by = data["data"]["user_id"]

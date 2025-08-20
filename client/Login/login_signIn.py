@@ -2,7 +2,7 @@ import sys
 sys.path.append('./client')
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
-from UI.mainClient import Ui_MainWindow  # Đổi 'main_client' thành file .py giao diện bạn tạo từ .ui
+from UI.ui_main.ui_main_window import Ui_MainWindow  # Đổi 'main_client' thành file .py giao diện bạn tạo từ .ui
 from UI.loginUI_large import Ui_LoginWindow  # File giao diện đăng nhập lớn
 from UI.signinUI_large import Ui_SignInWindow  # File giao diện đăng ký lớn
 from Request.handle_request_client import PycTalkClient
