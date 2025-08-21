@@ -48,12 +48,7 @@ class Ui_MainWindow(QtCore.QObject):
         
     def setupUi(self, MainWindow: QtWidgets.QMainWindow):
         """Setup the complete UI with enhanced features"""
-        try:
-            from UI.friendsUI import Ui_FriendsWindow
-            has_friends_ui = True
-        except ImportError:
-            logger.warning("FriendsUI not available, using fallback")
-            has_friends_ui = False
+        has_friends_ui = True  # Đã dùng SidebarWidget với FriendListWindow, không cần import Ui_FriendsWindow
             
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(900, 650)

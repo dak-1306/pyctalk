@@ -170,71 +170,7 @@ class MessengerDatabase:
             print(f"Error getting friends: {e}")
             return []
     
-    def create_sample_data(self):
-        """Tạo dữ liệu mẫu để test"""
-        try:
-            print("🔧 Creating sample data...")
-            
-            # Tạo users mẫu (chỉ thêm nếu chưa có)
-            users = [
-                ('nguyenvana', 'hashed_password_1', 'a@example.com'),
-                ('tranthib', 'hashed_password_2', 'b@example.com'),
-                ('levanc', 'hashed_password_3', 'c@example.com'),
-                ('phamthid', 'hashed_password_4', 'd@example.com'),
-                ('hoangvane', 'hashed_password_5', 'e@example.com')
-            ]
-            
-            for username, password, email in users:
-                query = "INSERT IGNORE INTO users (username, password_hash, email) VALUES (%s, %s, %s)"
-                self.db.execute(query, (username, password, email))
-            
-            print("✅ Sample users created")
-            
-            # Tạo friendships
-            friendships = [
-                (1, 2), (1, 3), (1, 4), (2, 3), (2, 5), (3, 4), (3, 5), (4, 5)
-            ]
-            
-            for user1, user2 in friendships:
-                # Đảm bảo user1 < user2
-                if user1 > user2:
-                    user1, user2 = user2, user1
-                
-                query = "INSERT IGNORE INTO friends (user1_id, user2_id) VALUES (%s, %s)"
-                self.db.execute(query, (user1, user2))
-            
-            print("✅ Sample friendships created")
-            
-            # Tạo tin nhắn mẫu với column name đúng
-            sample_messages = [
-                (1, 2, "Chào bạn! Bạn có khỏe không?"),
-                (2, 1, "Chào! Mình khỏe, cảm ơn bạn. Còn bạn thì sao?"),
-                (1, 2, "Mình cũng ổn. Project PycTalk tiến triển như thế nào rồi?"),
-                (2, 1, "Đang làm giao diện chat giống Messenger đây! 😊"),
-                (1, 2, "Wow nghe hay đấy! Khi nào demo được?"),
-                (1, 3, "Hôm nay có họp không?"),
-                (3, 1, "Có, 2h chiều nhé!"),
-                (1, 4, "Cảm ơn bạn về tài liệu!"),
-                (4, 1, "Không có gì, chúc bạn học tốt!"),
-                (2, 5, "Cuối tuần đi chơi không?"),
-                (5, 2, "OK, chúng ta đi đâu?"),
-            ]
-            
-            for sender, receiver, content in sample_messages:
-                query = """
-                INSERT INTO private_messages (sender_id, receiver_id, content, time_send)
-                VALUES (%s, %s, %s, NOW())
-                """
-                self.db.execute(query, (sender, receiver, content))
-            
-            print("✅ Sample messages created")
-            print("🎉 Sample data creation completed!")
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error creating sample data: {e}")
-            return False
+    # Đã loại bỏ hoàn toàn mock data, chỉ dùng dữ liệu thật từ database
     
     def close(self):
         """Đóng kết nối database"""

@@ -36,11 +36,11 @@ class SidebarWidget(QtWidgets.QFrame):
     def _setup_friends_tab(self):
         try:
             from UI.messenger_ui.friend_list_window import FriendListWindow
-            self.friends_widget = FriendListWindow(self.username)
+            self.friends_widget = FriendListWindow(self.username, user_id=self.user_id, client=self.client)
             friends_tab = QtWidgets.QWidget()
             f_lay = QtWidgets.QVBoxLayout(friends_tab)
             f_lay.setContentsMargins(0, 0, 0, 0)
-            f_lay.addWidget(self.friends_widget.centralWidget())
+            f_lay.addWidget(self.friends_widget)
             self.tabWidget.addTab(friends_tab, "👥 Bạn bè")
         except Exception as e:
             self._setup_fallback_friends_tab()
@@ -52,12 +52,8 @@ class SidebarWidget(QtWidgets.QFrame):
         search_bar.setPlaceholderText("🔍 Tìm kiếm bạn bè...")
         layout.addWidget(search_bar)
         friends_list = QtWidgets.QListWidget()
-        friends_list.addItems([
-            "👤 Nguyễn Văn A",
-            "👤 Trần Thị B",
-            "👤 Lê Văn C",
-            "👤 Phạm Thị D"
-        ])
+        # Không dùng dữ liệu ảo, chỉ hiển thị thông báo
+        friends_list.addItem("Không có dữ liệu bạn bè hoặc không kết nối được database.")
         layout.addWidget(friends_list)
         self.tabWidget.addTab(friends_tab, "👥 Bạn bè")
 
@@ -103,12 +99,36 @@ class SidebarWidget(QtWidgets.QFrame):
         separator = QtWidgets.QFrame()
         separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         actions_layout.addWidget(separator)
+
+        # Nút kết bạn mới
+        self.btnAddFriend = QtWidgets.QPushButton("➕ Kết bạn")
+        self.btnAddFriend.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        actions_layout.addWidget(self.btnAddFriend)
+
+        # Tích hợp logic gửi kết bạn
+        self.btnAddFriend.clicked.connect(self._show_add_friend_dialog)
+
         self.btnGroupChat = QtWidgets.QPushButton("🚀 Tạo Group Chat")
         self.btnGroupChat.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         actions_layout.addWidget(self.btnGroupChat)
+
         self.btnSettings = QtWidgets.QPushButton("⚙️ Cài đặt")
         self.btnSettings.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         actions_layout.addWidget(self.btnSettings)
         layout.addWidget(actions_frame)
+
+    def _show_add_friend_dialog(self):
+        from Add_friend.friend import FriendClient
+        # Hiển thị dialog nhập username cần kết bạn
+        username, ok = QtWidgets.QInputDialog.getText(self, "Kết bạn mới", "Nhập username muốn kết bạn:")
+        if not ok or not username:
+            return
+        friend_client = FriendClient(self.client)
+        response = friend_client.send_friend_request(username)
+        if response and response.get("success"):
+            QtWidgets.QMessageBox.information(self, "Thành công", f"Đã gửi yêu cầu kết bạn tới {username}!")
+        else:
+            error_msg = response.get("error", "Gửi yêu cầu thất bại.") if response else "Không nhận được phản hồi từ server."
+            QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
 
     # Có thể bổ sung các phương thức truy cập widget, reload, ... tại đây

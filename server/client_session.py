@@ -11,6 +11,13 @@ class ClientSession:
         self.client_address = client_address
         self.running = True
         self.group_handler = GroupHandler()
+        # Friend handler
+        try:
+            from server.Handle_AddFriend.friend_handle import friend_handler
+            self.friend_handler = friend_handler
+        except Exception as e:
+            print(f"Không thể import friend_handler: {e}")
+            self.friend_handler = None
         # Thiết lập timeout cho socket để tránh treo
         self.client_socket.settimeout(30.0)  # 30 giây timeout
 
@@ -126,31 +133,64 @@ class ClientSession:
                 
             # ===== FRIEND ACTIONS (Not implemented yet) =====
             elif action == "get_suggestions":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
-                
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    result = self.friend_handler.get_suggestions(username)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "add_friend":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
-                
+                if self.friend_handler:
+                    from_user = data["data"].get("from_user")
+                    to_user = data["data"].get("to_user")
+                    result = self.friend_handler.add_friend(from_user, to_user)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "get_friends":
-                user_id = data["data"].get("user_id")
-                # TODO: Lấy danh sách bạn bè từ DB, hiện trả về mẫu
-                friends = [
-                    {"user_id": 2, "username": "alice"},
-                    {"user_id": 3, "username": "bob"}
-                ]
-                self.send_response({"success": True, "friends": friends})
-                
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    result = self.friend_handler.get_friends(username)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "get_friend_requests":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
-                
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    result = self.friend_handler.get_friend_requests(username)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "accept_friend":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
-                
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    from_user = data["data"].get("from_user")
+                    result = self.friend_handler.accept_friend(username, from_user)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "reject_friend":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
-                
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    from_user = data["data"].get("from_user")
+                    result = self.friend_handler.reject_friend(username, from_user)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
+
             elif action == "remove_friend":
-                self.send_response({"success": False, "message": "Friend feature chưa được implement"})
+                if self.friend_handler:
+                    username = data["data"].get("username")
+                    friend_name = data["data"].get("friend_name")
+                    result = self.friend_handler.remove_friend(username, friend_name)
+                    self.send_response({"success": result.get("status") == "ok", **result})
+                else:
+                    self.send_response({"success": False, "message": "Friend handler not available"})
                 
             # ===== GROUP CHAT ACTIONS =====
             elif action == "create_group_with_members":
