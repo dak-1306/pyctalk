@@ -9,14 +9,12 @@ class ChatWindow(QtWidgets.QWidget):
     back_clicked = pyqtSignal()  # Signal to go back to chat list
     message_sent = pyqtSignal(str)  # Signal when message is sent
     
-    def __init__(self, chat_data=None, parent=None, **kwargs):
+    def __init__(self, chat_data=None, parent=None, pyctalk_client=None, **kwargs):
         super().__init__(parent)
-        
-        # Handle both new chat_data format and old parameter format for backward compatibility
+        # Xử lý dữ liệu chat
         if chat_data is not None:
             self.chat_data = chat_data
         else:
-            # Legacy support for old parameter names
             self.chat_data = {
                 'friend_name': kwargs.get('friend_username', 'Friend'),
                 'friend_id': kwargs.get('friend_id', 1),
@@ -25,9 +23,17 @@ class ChatWindow(QtWidgets.QWidget):
                 'last_message': kwargs.get('last_message', ''),
                 'unread_count': kwargs.get('unread_count', 0)
             }
-        
+        # Tích hợp Chat1v1Client
+        from Chat1_1.chat1v1_client import Chat1v1Client
+        self.pyctalk_client = pyctalk_client
+        self.chat1v1_client = None
+        if self.pyctalk_client:
+            self.chat1v1_client = Chat1v1Client(self.pyctalk_client, self.on_receive_message)
+            self.chat1v1_client.start_listen()
         self._setup_ui()
-        self._load_sample_messages()
+        # Không load sample, chỉ load khi không có client
+        if not self.chat1v1_client:
+            self._load_sample_messages()
         
     def _setup_ui(self):
         """Setup chat window UI"""
@@ -368,22 +374,33 @@ class ChatWindow(QtWidgets.QWidget):
         scrollbar.setValue(scrollbar.maximum())
     
     def send_message(self):
-        """Send a new message"""
+        """Gửi tin nhắn qua server"""
         text = self.txt_message.text().strip()
         if not text:
             return
-        
-        # Add sent message
-        self.add_message(text, True)
-        
-        # Emit signal
-        self.message_sent.emit(text)
-        
-        # Clear input
+        # Gửi tin nhắn qua Chat1v1Client nếu có
+        if self.chat1v1_client:
+            to_username = self.chat_data.get('friend_name')
+            result = self.chat1v1_client.send_message(to_username, text)
+            if result and result.get('success'):
+                self.add_message(text, True)
+                self.message_sent.emit(text)
+            else:
+                QtWidgets.QMessageBox.warning(self, "Lỗi gửi tin nhắn", "Không gửi được tin nhắn!")
+        else:
+            # Demo offline
+            self.add_message(text, True)
+            self.message_sent.emit(text)
+            QTimer.singleShot(2000, lambda: self._simulate_reply(text))
         self.txt_message.clear()
-        
-        # Simulate reply after 2 seconds
-        QTimer.singleShot(2000, lambda: self._simulate_reply(text))
+    def on_receive_message(self, data):
+        """Callback khi nhận tin nhắn mới từ server"""
+        # data: dict chứa thông tin tin nhắn
+        message = data.get('message', '')
+        sender = data.get('from', '')
+        # Nếu là tin nhắn từ bạn bè thì hiển thị
+        if sender == self.chat_data.get('friend_name'):
+            self.add_message(message, False)
     
     def _simulate_reply(self, original_message):
         """Simulate friend reply (for demo)"""

@@ -93,12 +93,29 @@ class Ui_MainWindow(QtCore.QObject):
             self.user_id,
             self.username
         )
+        # Kết nối signal mở khung chat 1-1
+        if hasattr(self.sidebar, 'friends_widget') and hasattr(self.sidebar.friends_widget, 'friend_selected'):
+            self.sidebar.friends_widget.friend_selected.connect(self._open_chat_window_1v1)
         # Gán các thuộc tính cần thiết để tương thích với code cũ
         self.tabWidget = self.sidebar.tabWidget
         self.groups_list = self.sidebar.groups_list
         self.btnGroupChat = self.sidebar.btnGroupChat
         self.btnSettings = self.sidebar.btnSettings
         self.outer_layout.addWidget(self.sidebar)
+    def _open_chat_window_1v1(self, chat_data):
+        """Mở khung chat 1-1 khi chọn bạn bè, chỉ hiển thị một khung chat duy nhất"""
+        from UI.messenger_ui.chat_window_widget import ChatWindow
+        # Xóa tất cả widget con khỏi main_layout (trừ topbar)
+        for i in reversed(range(self.main_layout.count())):
+            item = self.main_layout.itemAt(i)
+            widget = item.widget()
+            if widget and widget != self.topbar:
+                self.main_layout.removeWidget(widget)
+                widget.setParent(None)
+        # Thêm khung chat mới
+        chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
+        self.main_layout.addWidget(chat_window)
+        chat_window.show()
 
     def _setup_main_content(self):
         """Setup main content area with enhanced features"""

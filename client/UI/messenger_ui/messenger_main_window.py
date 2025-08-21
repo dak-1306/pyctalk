@@ -69,13 +69,10 @@ class MessengerMainWindow(QtWidgets.QMainWindow):
         # Add current user info to chat data
         chat_data['current_user_id'] = self.current_user_id
         chat_data['current_username'] = self.username
-        
-        # Create chat window
-        chat_window = ChatWindow(chat_data)
+        # Truyền pyctalk_client vào ChatWindow
+        chat_window = ChatWindow(chat_data, pyctalk_client=getattr(self, 'pyctalk_client', None))
         chat_window.back_clicked.connect(self._show_friend_list)
         chat_window.message_sent.connect(self._handle_message_sent)
-        
-        # Add to stacked widget
         self.stacked_widget.addWidget(chat_window)
         self.stacked_widget.setCurrentWidget(chat_window)
         
@@ -182,6 +179,8 @@ def main():
     username = client.get_username()
 
     main_window = MessengerMainWindow(username, user_id=user_id)
+    # Truyền client vào main_window để dùng cho ChatWindow
+    main_window.pyctalk_client = client
     main_window.show()
 
     print("🚀 PycTalk Messenger - Modular Application")

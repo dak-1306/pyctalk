@@ -18,6 +18,13 @@ class ClientSession:
         except Exception as e:
             print(f"Không thể import friend_handler: {e}")
             self.friend_handler = None
+        # Chat 1-1 handler
+        try:
+            from server.HandleChat1_1.chat_handler import chat_handler
+            self.chat1v1_handler = chat_handler
+        except Exception as e:
+            print(f"Không thể import chat_handler: {e}")
+            self.chat1v1_handler = None
         # Thiết lập timeout cho socket để tránh treo
         self.client_socket.settimeout(30.0)  # 30 giây timeout
 
@@ -117,6 +124,13 @@ class ClientSession:
                 password = data["data"]["password"]
                 result = login.login_user(username, password)
                 self.send_response(result)
+                # Đăng ký kết nối real-time nếu đăng nhập thành công
+                if result and result.get("success") and hasattr(self, "chat1v1_handler") and self.chat1v1_handler:
+                    try:
+                        self.chat1v1_handler.register_user_connection(username, self.client_socket)
+                        print(f"[Chat1v1] Registered real-time connection for {username}")
+                    except Exception as e:
+                        print(f"[Chat1v1] Failed to register connection for {username}: {e}")
                  
             elif action == "register":
                 username = data["data"]["username"]
@@ -242,7 +256,11 @@ class ClientSession:
                 self.send_response(result)
                 
             elif action == "send_message":
-                pass  # handle_send_message(data)
+                if self.chat1v1_handler:
+                    result = self.chat1v1_handler.handle_message_request(self.client_socket, data)
+                    self.send_response(result)
+                else:
+                    self.send_response({"success": False, "message": "Chat handler not available"})
             else:
                 print(f"❓ Unknown action from {self.client_address}: {action}")
                 self.send_response({"success": False, "message": f"Unknown action: {action}"})
