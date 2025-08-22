@@ -13,15 +13,14 @@ class LoginWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_LoginWindow()
         self.ui.setupUi(self)
+    # Gán callback mở đăng ký cho giao diện
+        self.ui.register_callback = self.open_register_window
         self.client = PycTalkClient()
 
         # Kết nối nút login
         self.ui.btnLogin.clicked.connect(self.handle_login)
 
-        # Cho nhãn "Create an Account?" thành clickable
-        self.ui.creatAccount.setText('<a href="#">Create an Account?</a>')
-        self.ui.creatAccount.setOpenExternalLinks(False)
-        self.ui.creatAccount.linkActivated.connect(self.open_register_window)
+    # Không cần creatAccount nữa, đã có link đăng ký ở giao diện mới
     
     def handle_login(self):
         username = self.ui.txtUsername.text()
@@ -77,9 +76,10 @@ class RegisterWindow(QtWidgets.QMainWindow):
         self.client = PycTalkClient()
 
         self.ui.btnSignin.clicked.connect(self.handle_register)
-        
-        # Xử lý nút "Back to Login" - bây giờ là QPushButton
-        self.ui.backToLogin.clicked.connect(self.back_to_login_clicked)
+
+        # Gán callback cho link "Đăng nhập ngay"
+        if hasattr(self.ui, 'lblBackToLogin'):
+            self.ui.login_callback = self.open_login_window
 
     def handle_register(self):
         username = self.ui.txtUsernameSignin.text()

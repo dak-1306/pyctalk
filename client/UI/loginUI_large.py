@@ -1,169 +1,128 @@
-# Large Login UI for PycTalk
+
+
+# Login UI theo mẫu ảnh
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 class Ui_LoginWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.setMinimumSize(500, 600)  # Kích thước lớn khớp với signup
-        MainWindow.setMaximumSize(500, 600)
-        MainWindow.resize(500, 600)
-        MainWindow.setWindowTitle("PycTalk - Login")
-        
-        # Lưu reference để tính toán responsive
-        self.MainWindow = MainWindow
-        
+        MainWindow.setFixedSize(700, 450)
+        MainWindow.setWindowTitle("Đăng nhập")
+
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        
-        self.widget = QtWidgets.QWidget(parent=self.centralwidget)
-        self.widget.setGeometry(QtCore.QRect(25, 25, 450, 550))
-        self.widget.setObjectName("widget")
-        
-        self.label = QtWidgets.QLabel(parent=self.widget)
-        self.label.setGeometry(QtCore.QRect(0, 0, 450, 550))
-        self.label.setStyleSheet("""
-            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
-                stop:0 #b2ebf2, stop:1 #e0f7fa);
-            border-radius: 25px;
+        MainWindow.setCentralWidget(self.centralwidget)
+
+        # Main background
+        self.centralwidget.setStyleSheet("""
+            background: #1e2a38;
         """)
-        self.label.setText("")
-        self.label.setObjectName("label")
-        
+
+        # Main layout chỉ có form login căn giữa
+        self.mainLayout = QtWidgets.QVBoxLayout(self.centralwidget)
+        self.mainLayout.setContentsMargins(0, 0, 0, 0)
+        self.mainLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        # Form login
+        self.formWidget = QtWidgets.QWidget()
+        self.formWidget.setFixedWidth(350)
+        self.formLayout = QtWidgets.QVBoxLayout(self.formWidget)
+        self.formLayout.setContentsMargins(30, 30, 30, 30)
+        self.formLayout.setSpacing(18)
+
         # Title
-        self.titleLabel = QtWidgets.QLabel(parent=self.widget)
-        self.titleLabel.setGeometry(QtCore.QRect(50, 60, 350, 60))
-        font = QtGui.QFont()
-        font.setPointSize(28)
-        font.setBold(True)
+        self.titleLabel = QtWidgets.QLabel("Đăng nhập")
+        font = QtGui.QFont("Fredoka One", 26, QtGui.QFont.Weight.Bold)
         self.titleLabel.setFont(font)
-        self.titleLabel.setStyleSheet("""
-            color: rgba(0, 0, 0, 180);
-            font-weight: bold;
-        """)
+        self.titleLabel.setStyleSheet("color: #a05a00; letter-spacing: 1px;")
         self.titleLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.titleLabel.setObjectName("titleLabel")
-        self.titleLabel.setText("Welcome Back")
-        
-        # Username field
-        self.txtUsername = QtWidgets.QLineEdit(parent=self.widget)
-        self.txtUsername.setGeometry(QtCore.QRect(60, 160, 330, 45))
-        self.txtUsername.setStyleSheet("""
+        self.formLayout.addWidget(self.titleLabel)
+
+        # Email input
+        self.txtEmail = QtWidgets.QLineEdit()
+        self.txtEmail.setPlaceholderText("Nhập userName...")
+        self.txtEmail.setStyleSheet("""
             QLineEdit {
-                color: #2F4F4F;
-                font-size: 18px;
-                border-radius: 10px;
-                padding: 12px 15px;
-                border: 2px solid #ddd;
-                background-color: white;
+                font-size: 17px;
+                border: 2px solid #3fc1c9;
+                border-radius: 24px;
+                padding: 12px 18px;
+                background: #fafdff;
             }
             QLineEdit:focus {
-                border: 2px solid #4A90E2;
-                background-color: #f8f9ff;
-            }
-            QLineEdit::placeholder {
-                color: #999;
+                border: 2.5px solid #364f6b;
             }
         """)
-        self.txtUsername.setObjectName("txtUsername")
-        
-        # Password field
-        self.txtPassword = QtWidgets.QLineEdit(parent=self.widget)
-        self.txtPassword.setGeometry(QtCore.QRect(60, 230, 330, 45))
+        self.formLayout.addWidget(self.txtEmail)
+
+        # Password input
+        self.txtPassword = QtWidgets.QLineEdit()
+        self.txtPassword.setPlaceholderText("Mật khẩu")
+        self.txtPassword.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.txtPassword.setStyleSheet("""
             QLineEdit {
-                color: #2F4F4F;
-                font-size: 18px;
-                border-radius: 10px;
-                padding: 12px 15px;
-                border: 2px solid #ddd;
-                background-color: white;
+                font-size: 17px;
+                border: 2px solid #3fc1c9;
+                border-radius: 24px;
+                padding: 12px 18px;
+                background: #fafdff;
             }
             QLineEdit:focus {
-                border: 2px solid #4A90E2;
-                background-color: #f8f9ff;
-            }
-            QLineEdit::placeholder {
-                color: #999;
+                border: 2.5px solid #364f6b;
             }
         """)
-        self.txtPassword.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
-        self.txtPassword.setObjectName("txtPassword")
-        
+        self.formLayout.addWidget(self.txtPassword)
+
+        # Remember me checkbox
+        self.chkRemember = QtWidgets.QCheckBox("Ghi nhớ đăng nhập")
+        self.chkRemember.setStyleSheet("font-size: 15px; color: #7a5a1e;")
+        self.formLayout.addWidget(self.chkRemember)
+
         # Login button
-        self.btnLogin = QtWidgets.QPushButton(parent=self.widget)
-        self.btnLogin.setGeometry(QtCore.QRect(60, 310, 330, 55))
-        font2 = QtGui.QFont()
-        font2.setBold(True)
-        font2.setPointSize(18)
-        self.btnLogin.setFont(font2)
+        self.btnLogin = QtWidgets.QPushButton("Đăng nhập")
+        btnFont = QtGui.QFont("Fredoka One", 16, QtGui.QFont.Weight.Bold)
+        self.btnLogin.setFont(btnFont)
         self.btnLogin.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         self.btnLogin.setStyleSheet("""
-            QPushButton#btnLogin{
-                background-color: #4A90E2;
-                color: white;
+            QPushButton {
+                background: #3fc1c9;
+                color: #fff;
                 border: none;
-                border-radius: 15px;
-                padding: 15px 25px;
+                border-radius: 24px;
+                padding: 14px 0;
                 font-weight: bold;
-                font-size: 18px;
+                font-size: 16px;
+                margin-top: 8px;
             }
-            QPushButton#btnLogin:hover {
-                background-color: #357ABD;
-            }
-            QPushButton#btnLogin:pressed {
-                background-color: #2C5F9E;
+            QPushButton:hover {
+                background: #364f6b;
             }
         """)
-        self.btnLogin.setObjectName("btnLogin")
-        
-        # Create account link
-        self.creatAccount = QtWidgets.QLabel(parent=self.widget)
-        self.creatAccount.setGeometry(QtCore.QRect(60, 390, 330, 35))
-        self.creatAccount.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        self.creatAccount.setStyleSheet("""
-            color: rgba(0, 0, 0, 150);
-            font-size: 16px;
-            text-decoration: underline;
-        """)
-        self.creatAccount.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.creatAccount.setObjectName("creatAccount")
-        
-        MainWindow.setCentralWidget(self.centralwidget)
-        
-        self.retranslateUi(MainWindow)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
-        
-        # Thêm event handler cho responsive
-        MainWindow.resizeEvent = self.on_resize
+        self.formLayout.addWidget(self.btnLogin)
 
-    def on_resize(self, event):
-        """Xử lý responsive khi thay đổi kích thước cửa sổ"""
-        window_width = self.MainWindow.width()
-        window_height = self.MainWindow.height()
-        
-        # Tính toán vị trí widget ở giữa
-        widget_width = 450
-        widget_height = 550
-        
-        # Căn giữa widget
-        x = (window_width - widget_width) // 2
-        y = (window_height - widget_height) // 2
-        
-        # Đảm bảo không ra ngoài biên
-        x = max(25, x)
-        y = max(25, y)
-        
-        # Cập nhật vị trí widget
-        self.widget.setGeometry(QtCore.QRect(x, y, widget_width, widget_height))
-        self.label.setGeometry(QtCore.QRect(0, 0, widget_width, widget_height))
+        # Register link
+        self.registerLayout = QtWidgets.QHBoxLayout()
+        self.registerLayout.setContentsMargins(0, 0, 0, 0)
+        self.registerLayout.setSpacing(4)
+        self.lblNoAccount = QtWidgets.QLabel("Bạn chưa có tài khoản?")
+        self.lblNoAccount.setStyleSheet("font-size: 15px; color: #7a5a1e;")
+        self.lblRegister = QtWidgets.QLabel('<a href="#" style="color:#ff9800; font-weight:bold; text-decoration:none;">Đăng kí ngay</a>')
+        self.lblRegister.setStyleSheet("font-size: 15px; color:#3fc1c9; font-weight:bold; text-decoration:none;")
+        self.lblRegister.setOpenExternalLinks(False)
+        # Kết nối sự kiện click cho link đăng ký
+        self.lblRegister.linkActivated.connect(self.on_register_clicked)
+        self.registerLayout.addWidget(self.lblNoAccount)
+        self.registerLayout.addWidget(self.lblRegister)
+        self.formLayout.addLayout(self.registerLayout)
+        self.mainLayout.addWidget(self.formWidget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
+
+    def on_register_clicked(self, link):
+        # Gọi callback nếu có, hoặc emit signal
+        if hasattr(self, 'register_callback') and callable(self.register_callback):
+            self.register_callback()
 
     def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "PycTalk - Login"))
-        self.txtUsername.setPlaceholderText(_translate("MainWindow", "Username"))
-        self.txtPassword.setPlaceholderText(_translate("MainWindow", "Password"))
-        self.btnLogin.setText(_translate("MainWindow", "LOGIN"))
-        self.creatAccount.setText(_translate("MainWindow", "Create an Account?"))
+        pass
 
 if __name__ == "__main__":
     import sys
