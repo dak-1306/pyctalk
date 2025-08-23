@@ -1,82 +1,82 @@
 # database/db.py
-import mysql.connector
-from mysql.connector import Error
+import asyncio
+import aiomysql
 
-class MySQLDatabase:
+
+class AsyncMySQLDatabase:
     def __init__(self, host="localhost", user="root", password="dang13062005", database="pyctalk"):
         self.host = host
         self.user = user
         self.password = password
         self.database = database
-        self.connection = None
-        self.cursor = None
-        self.connect()
+        self.pool = None
 
-    def connect(self):
-        """Kết nối tới MySQL server."""
-        if self.connection is not None and self.connection.is_connected():
-            return  # tránh kết nối lại
+    async def connect(self):
+        """Kết nối tới MySQL server với connection pool."""
+        if self.pool is not None:
+            return  # tránh tạo lại pool
         try:
-            self.connection = mysql.connector.connect(
+            self.pool = await aiomysql.create_pool(
                 host=self.host,
                 user=self.user,
                 password=self.password,
-                database=self.database,
-                autocommit=True,  # Tự động commit
-                charset='utf8mb4',
+                db=self.database,
+                autocommit=True,     # tự động commit
+                charset="utf8mb4",
                 use_unicode=True,
-                connection_timeout=10,  # Timeout 10 giây
-                auth_plugin='mysql_native_password'
+                minsize=1,           # số kết nối tối thiểu
+                maxsize=10,          # số kết nối tối đa
+                connect_timeout=10   # timeout kết nối
             )
-            self.cursor = self.connection.cursor(dictionary=True)
-            print("✅ Đã kết nối MySQL Database thành công.")
-        except Error as e:
-            print(f"❌ Lỗi khi kết nối MySQL: {e}")
-            self.connection = None
-            self.cursor = None
+            print("✅ Đã kết nối MySQL Database (async) thành công.")
+        except Exception as e:
+            print(f"❌ Lỗi khi kết nối MySQL (async): {e}")
+            self.pool = None
 
-    def disconnect(self):
-        """Đóng kết nối MySQL."""
-        if self.cursor:
-            self.cursor.close()
-        if self.connection:
-            self.connection.close()
-            print("🔌 Đã ngắt kết nối MySQL Database.")
+    async def disconnect(self):
+        """Đóng connection pool."""
+        if self.pool:
+            self.pool.close()
+            await self.pool.wait_closed()
+            print("🔌 Đã ngắt kết nối MySQL Database (async).")
 
-    def execute(self, query, params=()):
+    async def execute(self, query, params=()):
         """Dùng cho INSERT, UPDATE, DELETE."""
         try:
-            if not self.connection or not self.connection.is_connected():
-                self.connect()
-            self.cursor.execute(query, params)
-            if not self.connection.autocommit:
-                self.connection.commit()
-        except Error as e:
-            print(f"❌ Lỗi SQL Execute: {e}")
-            if self.connection:
-                self.connection.rollback()
-
-    def fetch_one(self, query, params=()):
+            if self.pool is None:
+                await self.connect()
+            async with self.pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    await cursor.execute(query, params)
+        except Exception as e:
+            print(f"❌ Lỗi SQL Execute (async): {e}")
+            raise  # Báo lỗi lên trên để messenger_db.py nhận biết
+    async def fetch_one(self, query, params=()):
         """Dùng cho SELECT 1 dòng."""
         try:
-            if not self.connection or not self.connection.is_connected():
-                self.connect()
-            self.cursor.execute(query, params)
-            return self.cursor.fetchone()
-        except Error as e:
-            print(f"❌ Lỗi SQL Fetch One: {e}")
+            if self.pool is None:
+                await self.connect()
+            async with self.pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
+                    await cursor.execute(query, params)
+                    return await cursor.fetchone()
+        except Exception as e:
+            print(f"❌ Lỗi SQL Fetch One (async): {e}")
             return None
 
-    def fetch_all(self, query, params=()):
+    async def fetch_all(self, query, params=()):
         """Dùng cho SELECT nhiều dòng."""
         try:
-            if not self.connection or not self.connection.is_connected():
-                self.connect()
-            self.cursor.execute(query, params)
-            return self.cursor.fetchall()
-        except Error as e:
-            print(f"❌ Lỗi SQL Fetch All: {e}")
+            if self.pool is None:
+                await self.connect()
+            async with self.pool.acquire() as conn:
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
+                    await cursor.execute(query, params)
+                    return await cursor.fetchall()
+        except Exception as e:
+            print(f"❌ Lỗi SQL Fetch All (async): {e}")
             return []
 
+
 # Khởi tạo thể hiện duy nhất
-db = MySQLDatabase()
+db = AsyncMySQLDatabase()

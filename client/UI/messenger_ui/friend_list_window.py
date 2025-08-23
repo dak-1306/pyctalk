@@ -3,6 +3,10 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
 from .chat_list_item_widget import ChatListItem
 
+# Thêm đường dẫn thư mục gốc để import được package database
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) )
+
 try:
     from database.messenger_db import MessengerDatabase
 except ImportError:
@@ -26,7 +30,8 @@ class FriendListWindow(QtWidgets.QWidget):
         else:
             self.client = None
         self._setup_ui()
-        self._load_conversations()
+        import asyncio
+        asyncio.create_task(self._load_conversations())
         
     # Đã bỏ kết nối database, chỉ lấy từ server
     
@@ -125,8 +130,8 @@ class FriendListWindow(QtWidgets.QWidget):
         scroll_area.setWidget(self.friends_container)
         main_layout.addWidget(scroll_area)
     
-    def _load_conversations(self):
-        """Lấy danh sách bạn bè từ server qua FriendClient"""
+    async def _load_conversations(self):
+        """Lấy danh sách bạn bè từ server qua FriendClient (callback, không khởi động lại listen_loop)"""
         if self.client is None:
             print("Không tìm thấy client để lấy danh sách bạn bè. Hãy truyền client khi khởi tạo FriendListWindow.")
             self._display_conversations([])
@@ -134,18 +139,34 @@ class FriendListWindow(QtWidgets.QWidget):
         try:
             from Add_friend.friend import FriendClient
             friend_client = FriendClient(self.client)
-            response = friend_client.get_friends()
-            friends = response.get("data", []) if response and response.get("success") else []
-            conversations = []
-            for friend_name in friends:
-                conversations.append({
-                    'friend_id': None,  # Nếu server trả về cả id thì dùng id
-                    'friend_name': friend_name,
-                    'last_message': '',
-                    'last_message_time': '',
-                    'unread_count': 0
-                })
-            self._display_conversations(conversations)
+            print(f"[DEBUG] friend_client.get_friends type: {type(friend_client.get_friends)} value: {friend_client.get_friends}")
+
+            async def friends_callback(response):
+                print(f"[DEBUG] get_friends response type: {type(response)} value: {response}")
+                friends = response.get("data", []) if response and isinstance(response, dict) and response.get("success") else []
+                conversations = []
+                for friend in friends:
+                    # Nếu server trả về dict với id và name
+                    if isinstance(friend, dict):
+                        friend_id = friend.get('id') or friend.get('friend_id')
+                        friend_display_name = friend.get('name') or friend.get('friend_name') or str(friend_id)
+                    else:
+                        # Nếu chỉ trả về tên, KHÔNG tạo id tạm bằng hash, bỏ qua bạn bè không có id
+                        print(f"[WARNING] Friend không có id, bỏ qua: {friend}")
+                        continue
+                    if not friend_id:
+                        print(f"[WARNING] Friend không có id hợp lệ, bỏ qua: {friend}")
+                        continue
+                    conversations.append({
+                        'friend_id': friend_id,
+                        'friend_name': friend_display_name,
+                        'last_message': '',
+                        'last_message_time': '',
+                        'unread_count': 0
+                    })
+                self._display_conversations(conversations)
+
+            await friend_client.get_friends(friends_callback)
         except Exception as e:
             print(f"Error loading friends: {e}")
             self._display_conversations([])
@@ -188,7 +209,8 @@ class FriendListWindow(QtWidgets.QWidget):
     
     def refresh_conversations(self):
         """Refresh conversation list"""
-        self._load_conversations()
+        import asyncio
+        asyncio.create_task(self._load_conversations())
     
     def add_conversation(self, conversation_data):
         """Add a new conversation to the list"""

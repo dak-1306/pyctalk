@@ -29,8 +29,7 @@ class LoginWindow(QtWidgets.QMainWindow):
             QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập đầy đủ username và password")
             return
 
-        if self.client.running:
-            await self.client.disconnect()
+
 
         if not await self.client.connect():
             QMessageBox.critical(self, "Lỗi", "Không thể kết nối đến server")
@@ -42,22 +41,31 @@ class LoginWindow(QtWidgets.QMainWindow):
         }
 
         async def login_callback(response):
+            print(f"[DEBUG] Callback đăng nhập được gọi với response: {response}")
             if response and response.get("success"):
                 print("✅ Đăng nhập thành công.")
                 self.client.user_id = response.get("user_id")
                 self.client.username = username
                 self.client.start_ping()
+                print("[DEBUG] Gọi goto_main_window()")
                 self.goto_main_window()
             else:
+                print("[DEBUG] Đăng nhập thất bại hoặc không có response thành công")
                 await self.client.disconnect()
                 QMessageBox.warning(self, "Thất bại", "Tên đăng nhập hoặc mật khẩu không đúng")
 
         await self.client.send_json(request, login_callback)
 
     def goto_main_window(self):
-        self.main_window = MainClientWindow(self.client)
-        self.main_window.show()
-        self.hide()
+        print("[DEBUG] Bắt đầu chuyển sang MainClientWindow")
+        try:
+            self.main_window = MainClientWindow(self.client)
+            print("[DEBUG] MainClientWindow khởi tạo thành công")
+            self.main_window.show()
+            self.hide()
+        except Exception as e:
+            print(f"[ERROR] Lỗi khi chuyển sang MainClientWindow: {e}")
+            QtWidgets.QMessageBox.critical(self, "Lỗi", f"Không thể vào giao diện chính: {e}")
 
     def open_register_window(self):
         self.register_window = RegisterWindow()

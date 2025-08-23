@@ -2,6 +2,7 @@ import logging
 from PyQt6 import QtCore, QtGui, QtWidgets
 from Group_chat.group_api_client import GroupAPIClient
 from Group_chat.group_chat_logic import GroupChatLogic
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,8 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.group_data = group_data
         self._setupUI()
         self.logic.current_group = group_data
-        self.logic.load_group_messages()
+        import asyncio
+        asyncio.create_task(self.logic.load_group_messages())
 
     def _setupUI(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -29,7 +31,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.message_input.setPlaceholderText("Nhập tin nhắn...")
         input_layout.addWidget(self.message_input)
         self.send_btn = QtWidgets.QPushButton("Gửi")
-        self.send_btn.clicked.connect(self.send_message)
+        self.send_btn.clicked.connect(lambda: asyncio.create_task(self.send_message()))
         input_layout.addWidget(self.send_btn)
         layout.addLayout(input_layout)
 
@@ -47,16 +49,16 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
     def update_group_info(self, group_data):
         self.group_info_label.setText(f"Nhóm: {group_data['group_name']} (ID: {group_data['group_id']})")
 
-    def send_message(self):
+    async def send_message(self):
         if not self.logic.current_group:
             QtWidgets.QMessageBox.warning(self, "Lỗi", "Vui lòng chọn nhóm trước")
             return
         content = self.message_input.text().strip()
         if not content:
             return
-        response = self.api_client.send_group_message(self.user_id, self.group_data["group_id"], content)
+        response = await self.api_client.send_group_message(self.user_id, self.group_data["group_id"], content)
         if response and response.get("success"):
             self.message_input.clear()
-            self.logic.load_group_messages(offset=0)
+            await self.logic.load_group_messages(offset=0)
         else:
             QtWidgets.QMessageBox.warning(self, "Lỗi", "Không thể gửi tin nhắn")

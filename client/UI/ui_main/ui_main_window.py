@@ -6,6 +6,10 @@ from UI.ui_main.topbar_widget import TopBarWidget
 from UI.ui_main.sidebar_widget import SidebarWidget
 logger = logging.getLogger(__name__)
 
+# Thêm đường dẫn thư mục gốc để import được package database
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from .status_thread import StatusUpdateThread
 from .settings_manager import SettingsManager
 from .notification_manager import NotificationManager
@@ -112,10 +116,19 @@ class Ui_MainWindow(QtCore.QObject):
             if widget and widget != self.topbar:
                 self.main_layout.removeWidget(widget)
                 widget.setParent(None)
+        # Đảm bảo current_user_id được truyền vào chat_data
+        if 'current_user_id' not in chat_data or chat_data['current_user_id'] is None:
+            chat_data['current_user_id'] = self.user_id
+        # Đảm bảo current_user_id là số nguyên
+        try:
+            chat_data['current_user_id'] = int(chat_data['current_user_id'])
+        except Exception:
+            pass
         # Thêm khung chat mới
         chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
         self.main_layout.addWidget(chat_window)
         chat_window.show()
+        # Lịch sử tin nhắn sẽ được ChatWindow tự động lấy qua API client (async), không cần gọi trực tiếp ở đây nữa.
 
     def _setup_main_content(self):
         """Setup main content area with enhanced features"""
@@ -626,18 +639,21 @@ class Ui_MainWindow(QtCore.QObject):
                 self.groups_list.clear()
                 self.groups_list.addItem("Không tìm thấy user_id")
                 return
-            response = api_client.get_user_groups(int(user_id))
-            self.groups_list.clear()
-            if response and response.get("success"):
-                for group in response.get("groups", []):
-                    group_name = group["group_name"]
-                    member_count = f"{group.get('member_count', 'N/A')} thành viên" if 'member_count' in group else ""
-                    item = QtWidgets.QListWidgetItem(f"{group_name}\n{member_count}")
-                    item.setSizeHint(QtCore.QSize(0, 50))
-                    item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
-                    self.groups_list.addItem(item)
-            else:
-                self.groups_list.addItem("Không thể tải danh sách nhóm")
+            import asyncio
+            async def load_groups():
+                response = await api_client.get_user_groups(int(user_id))
+                self.groups_list.clear()
+                if response and response.get("success"):
+                    for group in response.get("groups", []):
+                        group_name = group["group_name"]
+                        member_count = f"{group.get('member_count', 'N/A')} thành viên" if 'member_count' in group else ""
+                        item = QtWidgets.QListWidgetItem(f"{group_name}\n{member_count}")
+                        item.setSizeHint(QtCore.QSize(0, 50))
+                        item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
+                        self.groups_list.addItem(item)
+                else:
+                    self.groups_list.addItem("Không thể tải danh sách nhóm")
+            asyncio.create_task(load_groups())
         except Exception as e:
             self.groups_list.clear()
             self.groups_list.addItem(f"Lỗi tải nhóm: {e}")

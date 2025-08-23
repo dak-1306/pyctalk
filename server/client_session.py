@@ -1,16 +1,20 @@
 import json
-import socket
+import asyncio
+import time
 from server.Login_server.RegisterHandle import register
 from server.Login_server.LoginHandle import login
 from server.HandleGroupChat.group_handler import GroupHandler
-import time
+
 
 class ClientSession:
-    def __init__(self, client_socket, client_address):
-        self.client_socket = client_socket
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, client_address):
+        self.reader = reader
+        self.writer = writer
         self.client_address = client_address
         self.running = True
         self.group_handler = GroupHandler()
+        self.last_ping_time = time.time()
+
         # Friend handler
         try:
             from server.Handle_AddFriend.friend_handle import friend_handler
@@ -18,6 +22,7 @@ class ClientSession:
         except Exception as e:
             print(f"Không thể import friend_handler: {e}")
             self.friend_handler = None
+
         # Chat 1-1 handler
         try:
             from server.HandleChat1_1.chat_handler import chat_handler
@@ -25,250 +30,211 @@ class ClientSession:
         except Exception as e:
             print(f"Không thể import chat_handler: {e}")
             self.chat1v1_handler = None
-        # Thiết lập timeout cho socket để tránh treo
-        self.client_socket.settimeout(30.0)  # 30 giây timeout
 
-    def run(self):
+    async def run(self):
         print(f"🟢 Client {self.client_address} session started.")
-        self.last_ping_time = time.time()
-        
         try:
             while self.running:
-                # Kiểm tra timeout ping
-                if time.time() - self.last_ping_time > 60:  # 60 giây không ping
-                    self.handle_disconnect("Timeout - Không có ping từ client")
+                # timeout ping
+                if time.time() - self.last_ping_time > 60:
+                    await self.handle_disconnect("Timeout - Không có ping từ client")
                     break
-                    
-                # Nhận 4 byte độ dài
-                length_prefix = self.client_socket.recv(4)
+
+                # đọc 4 byte length prefix
+                length_prefix = await self.reader.readexactly(4)
                 if not length_prefix:
-                    self.handle_disconnect("Không nhận được độ dài thông điệp")
+                    await self.handle_disconnect("Không nhận được độ dài thông điệp")
                     break
 
-                message_length = int.from_bytes(length_prefix, 'big')
-                
-                # Giới hạn kích thước tin nhắn để tránh DoS
-                if message_length > 1024 * 1024:  # 1MB max
-                    self.handle_disconnect("Tin nhắn quá lớn")
-                    break
-                    
-                message_data = b''
-                bytes_received = 0
-                while bytes_received < message_length:
-                    remaining = message_length - bytes_received
-                    chunk_size = min(remaining, 4096)  # Nhận tối đa 4KB mỗi lần
-                    chunk = self.client_socket.recv(chunk_size)
-                    if not chunk:
-                        self.handle_disconnect("Kết nối bị đóng khi đang nhận dữ liệu")
-                        break
-                    message_data += chunk
-                    bytes_received += len(chunk)
+                message_length = int.from_bytes(length_prefix, "big")
 
+                if message_length > 1024 * 1024:  # 1MB
+                    await self.handle_disconnect("Tin nhắn quá lớn")
+                    break
+
+                message_data = await self.reader.readexactly(message_length)
                 if not message_data:
-                    self.handle_disconnect("Không nhận được dữ liệu nào")
+                    await self.handle_disconnect("Không nhận được dữ liệu nào")
                     break
 
-                self.handle_message(message_data)
+                await self.handle_message(message_data)
 
-        except (ConnectionResetError, socket.error) as e:
-            self.handle_disconnect(f"Lỗi kết nối: {e}")
-        except socket.timeout:
-            self.handle_disconnect("Timeout - Không có hoạt động trong 30 giây")
+        except asyncio.IncompleteReadError:
+            await self.handle_disconnect("Client đóng kết nối")
         except Exception as e:
-            self.handle_disconnect(f"Lỗi không mong muốn: {e}")
-
+            await self.handle_disconnect(f"Lỗi: {e}")
         finally:
-            self.cleanup()
+            await self.cleanup()
 
-    def handle_disconnect(self, reason):
+    async def handle_disconnect(self, reason):
         print(f"⛔ Client {self.client_address} disconnected. Lý do: {reason}")
-        self.running = False  # Gửi tín hiệu dừng vòng lặp
+        self.running = False
 
-    def cleanup(self):
+    async def cleanup(self):
         try:
-            self.client_socket.close()
+            self.writer.close()
+            await self.writer.wait_closed()
             print(f"🔌 Đã đóng kết nối với {self.client_address}")
         except Exception as e:
-            print(f"⚠️ Lỗi khi đóng socket {self.client_address}: {e}")
+            print(f"⚠️ Lỗi khi đóng writer {self.client_address}: {e}")
 
-    def send_response(self, response_dict):
+    async def send_response(self, response_dict):
         try:
-            response_json = json.dumps(response_dict, ensure_ascii=False).encode('utf-8')
-            response_length = len(response_json).to_bytes(4, 'big')
-            
-            # Gửi length prefix
-            self.client_socket.sendall(response_length)
-            # Gửi data theo chunks để tránh buffer overflow
-            bytes_sent = 0
-            while bytes_sent < len(response_json):
-                chunk = response_json[bytes_sent:bytes_sent + 8192]  # 8KB chunks
-                self.client_socket.sendall(chunk)
-                bytes_sent += len(chunk)
-                
+            response_json = json.dumps(response_dict, ensure_ascii=False).encode("utf-8")
+            response_length = len(response_json).to_bytes(4, "big")
+            self.writer.write(response_length + response_json)
+            await self.writer.drain()
         except Exception as e:
             print(f"❌ Không gửi được phản hồi cho {self.client_address}: {e}")
-            self.running = False  # Tự dừng nếu không gửi được
+            self.running = False
 
-    def handle_message(self, raw_data):
+    async def handle_message(self, raw_data):
         try:
             data = json.loads(raw_data.decode())
             action = data.get("action")
+
             if action == "ping":
-                print(f"💓 Ping từ {self.client_address}({data['data']['username']})")
-                # Cập nhật last_ping_time nếu có
-                if hasattr(self, 'last_ping_time'):
-                    self.last_ping_time = time.time()
+                print(f"💓 Ping từ {self.client_address} ({data['data']['username']})")
+                self.last_ping_time = time.time()
                 return
+
             elif action == "login":
                 username = data["data"]["username"]
                 password = data["data"]["password"]
-                result = login.login_user(username, password)
-                self.send_response(result)
-                # Đăng ký kết nối real-time nếu đăng nhập thành công
-                if result and result.get("success") and hasattr(self, "chat1v1_handler") and self.chat1v1_handler:
+                result = await login.login_user(username, password)
+                await self.send_response(result)
+
+                if result and result.get("success") and self.chat1v1_handler:
                     try:
-                        self.chat1v1_handler.register_user_connection(username, self.client_socket)
+                        self.chat1v1_handler.register_user_connection(username, self.writer)
                         print(f"[Chat1v1] Registered real-time connection for {username}")
                     except Exception as e:
                         print(f"[Chat1v1] Failed to register connection for {username}: {e}")
-                 
+
             elif action == "register":
                 username = data["data"]["username"]
                 password = data["data"]["password"]
                 email = data["data"]["email"]
-                result = register.register_user(username, password, email)
-                self.send_response(result)
-                self.running = False # Dừng phiên sau khi đăng ký thành công
-                
-            elif action == "logout":
-                print(f"🔒 {self.client_address}({data['data']['username']}) yêu cầu đăng xuất.")
-                self.send_response({"success": True, "message": "Đã đăng xuất."})
+                result = await register.register_user(username, password, email)
+                await self.send_response(result)
                 self.running = False
-                
-            # ===== FRIEND ACTIONS (Not implemented yet) =====
-            elif action == "get_suggestions":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    result = self.friend_handler.get_suggestions(username)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
 
-            elif action == "add_friend":
-                if self.friend_handler:
-                    from_user = data["data"].get("from_user")
-                    to_user = data["data"].get("to_user")
-                    result = self.friend_handler.add_friend(from_user, to_user)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
+            elif action == "logout":
+                print(f"🔒 {self.client_address} yêu cầu đăng xuất.")
+                await self.send_response({"success": True, "message": "Đã đăng xuất."})
+                self.running = False
 
-            elif action == "get_friends":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    result = self.friend_handler.get_friends(username)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
+            # ===== FRIEND ACTIONS =====
+            elif action == "get_suggestions" and self.friend_handler:
+                username = data["data"].get("username")
+                result = await self.friend_handler.get_suggestions(username)
+                await self.send_response({"success": result.get("status") == "ok", **result})
 
-            elif action == "get_friend_requests":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    result = self.friend_handler.get_friend_requests(username)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
+            elif action == "add_friend" and self.friend_handler:
+                from_user = data["data"].get("from_user")
+                to_user = data["data"].get("to_user")
+                result = await self.friend_handler.add_friend(from_user, to_user)
+                await self.send_response({"success": result.get("status") == "ok", **result})
 
-            elif action == "accept_friend":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    from_user = data["data"].get("from_user")
-                    result = self.friend_handler.accept_friend(username, from_user)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
+            elif action == "get_friends" and self.friend_handler:
+                username = data["data"].get("username")
+                result = await self.friend_handler.get_friends(username)
+                await self.send_response({"success": result.get("status") == "ok", **result})
 
-            elif action == "reject_friend":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    from_user = data["data"].get("from_user")
-                    result = self.friend_handler.reject_friend(username, from_user)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
+            elif action == "get_friend_requests" and self.friend_handler:
+                username = data["data"].get("username")
+                result = await self.friend_handler.get_friend_requests(username)
+                await self.send_response({"success": result.get("status") == "ok", **result})
 
-            elif action == "remove_friend":
-                if self.friend_handler:
-                    username = data["data"].get("username")
-                    friend_name = data["data"].get("friend_name")
-                    result = self.friend_handler.remove_friend(username, friend_name)
-                    self.send_response({"success": result.get("status") == "ok", **result})
-                else:
-                    self.send_response({"success": False, "message": "Friend handler not available"})
-                
-            # ===== GROUP CHAT ACTIONS =====
+            elif action == "accept_friend" and self.friend_handler:
+                username = data["data"].get("username")
+                from_user = data["data"].get("from_user")
+                result = await self.friend_handler.accept_friend(username, from_user)
+                await self.send_response({"success": result.get("status") == "ok", **result})
+
+            elif action == "reject_friend" and self.friend_handler:
+                username = data["data"].get("username")
+                from_user = data["data"].get("from_user")
+                result = await self.friend_handler.reject_friend(username, from_user)
+                await self.send_response({"success": result.get("status") == "ok", **result})
+
+            elif action == "remove_friend" and self.friend_handler:
+                username = data["data"].get("username")
+                friend_name = data["data"].get("friend_name")
+                result = await self.friend_handler.remove_friend(username, friend_name)
+                await self.send_response({"success": result.get("status") == "ok", **result})
+
+            # ===== CHAT 1-1 =====
+            elif action == "get_chat_history" and self.chat1v1_handler:
+                user_id = data["data"].get("user_id")
+                friend_id = data["data"].get("friend_id")
+                limit = data["data"].get("limit", 50)
+                result = await self.chat1v1_handler.handle_get_history(self.writer, {
+                    "user1": user_id,
+                    "user2": friend_id,
+                    "limit": limit
+                })
+                # Trả về đúng định dạng: success, data (chứa messages), message
+                await self.send_response({
+                    "success": result.get("success", False),
+                    "data": result.get("data", {}),
+                    "message": result.get("message", "")
+                })
             elif action == "create_group_with_members":
                 group_name = data["data"].get("group_name")
                 created_by = data["data"].get("user_id")
                 member_ids = data["data"].get("member_ids", [])
-                result = self.group_handler.create_group_with_members(group_name, created_by, member_ids)
-                self.send_response(result)
-                
+                result = await self.group_handler.create_group_with_members(group_name, created_by, member_ids)
+                await self.send_response(result)
+
             elif action == "create_group":
                 group_name = data["data"]["group_name"]
                 created_by = data["data"]["user_id"]
-                result = self.group_handler.create_group(group_name, created_by)
-                self.send_response(result)
-                
+                result = await self.group_handler.create_group(group_name, created_by)
+                await self.send_response(result)
+
             elif action == "add_member_to_group":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 admin_id = data["data"]["admin_id"]
-                print(f"🔧 Adding member: group_id={group_id}, user_id={user_id}, admin_id={admin_id}")
-                result = self.group_handler.add_member_to_group(group_id, user_id, admin_id)
-                print(f"🔧 Add member result: {result}")
-                self.send_response(result)
-                
+                result = await self.group_handler.add_member_to_group(group_id, user_id, admin_id)
+                await self.send_response(result)
+
             elif action == "send_group_message":
                 sender_id = data["data"]["sender_id"]
                 group_id = data["data"]["group_id"]
                 content = data["data"]["content"]
-                result = self.group_handler.send_group_message(sender_id, group_id, content)
-                self.send_response(result)
-                
+                result = await self.group_handler.send_group_message(sender_id, group_id, content)
+                await self.send_response(result)
+
             elif action == "get_group_messages":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 limit = data["data"].get("limit", 50)
                 offset = data["data"].get("offset", 0)
-                result = self.group_handler.get_group_messages(group_id, user_id, limit, offset)
-                self.send_response(result)
-                
+                result = await self.group_handler.get_group_messages(group_id, user_id, limit, offset)
+                await self.send_response(result)
+
             elif action == "get_user_groups":
                 user_id = data["data"]["user_id"]
-                result = self.group_handler.get_user_groups(user_id)
-                self.send_response(result)
-                
+                result = await self.group_handler.get_user_groups(user_id)
+                await self.send_response(result)
+
             elif action == "get_group_members":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
-                result = self.group_handler.get_group_members(group_id, user_id)
-                self.send_response(result)
-                
-            elif action == "send_message":
-                if self.chat1v1_handler:
-                    result = self.chat1v1_handler.handle_message_request(self.client_socket, data)
-                    self.send_response(result)
-                else:
-                    self.send_response({"success": False, "message": "Chat handler not available"})
-            else:
-                print(f"❓ Unknown action from {self.client_address}: {action}")
-                self.send_response({"success": False, "message": f"Unknown action: {action}"})
+                result = await self.group_handler.get_group_members(group_id, user_id)
+                await self.send_response(result)
 
+            elif action == "send_message" and self.chat1v1_handler:
+                print(f"[DEBUG] Server received send_message: {data}")
+                result = await self.chat1v1_handler.handle_message_request(self.reader, self.writer, data)
+                await self.send_response(result)
+
+            else:
+                await self.send_response({"success": False, "message": f"Unknown action: {action}"})
 
         except json.JSONDecodeError:
-            print(f"❌ Invalid JSON from {self.client_address}")
-            self.send_response({"success": False, "message": "Invalid JSON"})
+            await self.send_response({"success": False, "message": "Invalid JSON"})
         except Exception as e:
-            print(f"❌ Lỗi xử lý message từ {self.client_address}: {e}")
-            self.send_response({"success": False, "message": f"Server error: {e}"})
+            await self.send_response({"success": False, "message": f"Server error: {e}"})

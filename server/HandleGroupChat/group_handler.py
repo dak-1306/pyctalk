@@ -1,45 +1,55 @@
+# server/group_handler.py
 from database.db import db
 from datetime import datetime
 
 class GroupHandler:
-    def create_group_with_members(self, group_name: str, created_by: int, member_ids: list) -> dict:
+    def __init__(self):
+        pass
+
+    async def create_group_with_members(self, group_name: str, created_by: int, member_ids: list) -> dict:
         """Tạo nhóm mới và thêm nhiều thành viên"""
         try:
             # Tạo nhóm
-            db.execute(
+            await db.execute(
                 "INSERT INTO group_chat (group_name, created_by) VALUES (%s, %s)",
                 (group_name, created_by)
             )
+
             # Lấy ID nhóm vừa tạo
-            result = db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
+            result = await db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
             group_id = result["group_id"]
+
             # Thêm người tạo vào nhóm
-            db.execute(
+            await db.execute(
                 "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                 (group_id, created_by)
             )
+
             # Thêm các thành viên được chọn
             added_count = 0
             for uid in member_ids:
-                # Không thêm trùng người tạo
                 if int(uid) == int(created_by):
                     continue
+
                 # Kiểm tra user tồn tại
-                user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (uid,))
+                user_exists = await db.fetch_one("SELECT id FROM users WHERE id = %s", (uid,))
                 if not user_exists:
                     continue
+
                 # Kiểm tra đã là thành viên chưa
-                already_member = db.fetch_one(
+                already_member = await db.fetch_one(
                     "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
                     (group_id, uid)
                 )
                 if already_member:
                     continue
-                db.execute(
+
+                await db.execute(
                     "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                     (group_id, uid)
                 )
                 added_count += 1
+
             return {
                 "success": True,
                 "message": f"Tạo nhóm '{group_name}' thành công, đã thêm {added_count} thành viên.",
@@ -47,104 +57,75 @@ class GroupHandler:
             }
         except Exception as e:
             return {"success": False, "message": f"Lỗi tạo nhóm: {str(e)}"}
-    def __init__(self):
-        pass
-    
-    def create_group(self, group_name: str, created_by: int) -> dict:
+
+    async def create_group(self, group_name: str, created_by: int) -> dict:
         """Tạo nhóm chat mới"""
         try:
-            # Tạo nhóm
-            db.execute(
+            await db.execute(
                 "INSERT INTO group_chat (group_name, created_by) VALUES (%s, %s)",
                 (group_name, created_by)
             )
-            
-            # Lấy ID nhóm vừa tạo
-            result = db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
+            result = await db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
             group_id = result["group_id"]
-            
-            # Thêm người tạo vào nhóm
-            db.execute(
+
+            await db.execute(
                 "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                 (group_id, created_by)
             )
-            
-            return {
-                "success": True, 
-                "message": f"Tạo nhóm '{group_name}' thành công",
-                "group_id": group_id
-            }
-            
+            return {"success": True, "message": f"Tạo nhóm '{group_name}' thành công", "group_id": group_id}
         except Exception as e:
             return {"success": False, "message": f"Lỗi tạo nhóm: {str(e)}"}
 
-    def add_member_to_group(self, group_id: int, user_id: int, added_by: int) -> dict:
+    async def add_member_to_group(self, group_id: int, user_id: int, added_by: int) -> dict:
         """Thêm thành viên vào nhóm"""
         try:
-        # Kiểm tra người thêm có phải là admin (người tạo nhóm) không
-            group_info = db.fetch_one(
-                "SELECT created_by FROM group_chat WHERE group_id = %s",
-                (group_id,)
-            )
+            group_info = await db.fetch_one("SELECT created_by FROM group_chat WHERE group_id = %s", (group_id,))
             if not group_info or group_info["created_by"] != added_by:
                 return {"success": False, "message": "Chỉ admin mới được thêm thành viên"}
 
-            # Kiểm tra user có tồn tại không
-            user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
+            user_exists = await db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
             if not user_exists:
                 return {"success": False, "message": "Người dùng không tồn tại"}
 
-            # Kiểm tra đã là thành viên chưa
-            already_member = db.fetch_one(
+            already_member = await db.fetch_one(
                 "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
                 (group_id, user_id)
             )
             if already_member:
                 return {"success": False, "message": "Người dùng đã là thành viên của nhóm"}
 
-            # Thêm thành viên
-            db.execute(
+            await db.execute(
                 "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                 (group_id, user_id)
             )
 
-            # Lấy thông tin người dùng vừa thêm
-            user_info = db.fetch_one(
-                "SELECT username FROM users WHERE id = %s", 
-                (user_id,)
-            )
-
-            return {
-                "success": True,
-                "message": f"Đã thêm {user_info['username']} vào nhóm"
-            }
+            user_info = await db.fetch_one("SELECT username FROM users WHERE id = %s", (user_id,))
+            return {"success": True, "message": f"Đã thêm {user_info['username']} vào nhóm"}
         except Exception as e:
             return {"success": False, "message": f"Lỗi thêm thành viên: {str(e)}"}
 
-    def send_group_message(self, sender_id: int, group_id: int, content: str) -> dict:
+    async def send_group_message(self, sender_id: int, group_id: int, content: str) -> dict:
         """Gửi tin nhắn nhóm"""
         try:
-            # Kiểm tra thành viên nhóm
-            member_check = db.fetch_one(
+            member_check = await db.fetch_one(
                 "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
                 (group_id, sender_id)
             )
             if not member_check:
                 return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            # Kiểm tra nội dung tin nhắn
+
             if not content or len(content.strip()) == 0:
                 return {"success": False, "message": "Nội dung tin nhắn không được để trống"}
             if len(content) > 1000:
                 return {"success": False, "message": "Nội dung tin nhắn quá dài (tối đa 1000 ký tự)"}
-            # Lưu tin nhắn vào database
-            db.execute(
+
+            await db.execute(
                 "INSERT INTO group_messages (sender_id, group_id, content) VALUES (%s, %s, %s)",
                 (sender_id, group_id, content)
             )
-            # Lấy thông tin tin nhắn vừa gửi
-            message = db.fetch_one(
-                """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, 
-                          gm.time_send, u.username as sender_name
+
+            message = await db.fetch_one(
+                """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, gm.time_send, u.username as sender_name
                    FROM group_messages gm 
                    JOIN users u ON gm.sender_id = u.id 
                    WHERE gm.sender_id = %s AND gm.group_id = %s 
@@ -153,6 +134,7 @@ class GroupHandler:
             )
             if not message:
                 return {"success": False, "message": "Không thể lấy thông tin tin nhắn"}
+
             return {
                 "success": True,
                 "message": "Gửi tin nhắn thành công",
@@ -170,57 +152,52 @@ class GroupHandler:
             print("[GroupHandler] Lỗi gửi tin nhắn:", traceback.format_exc())
             return {"success": False, "message": f"Lỗi gửi tin nhắn: {str(e)}"}
 
-    def get_group_messages(self, group_id: int, user_id: int, limit: int = 50, offset: int = 0) -> dict:
+    async def get_group_messages(self, group_id: int, user_id: int, limit: int = 50, offset: int = 0) -> dict:
         """Lấy tin nhắn nhóm"""
         try:
-            # Kiểm tra thành viên nhóm
-            member_check = db.fetch_one(
+            member_check = await db.fetch_one(
                 "SELECT * FROM group_members WHERE group_id = %s AND user_id = %s",
                 (group_id, user_id)
             )
             if not member_check:
                 return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            # Lấy tin nhắn
-            messages = db.fetch_all(
-                """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, 
-                          gm.time_send, u.username as sender_name
+
+            messages = await db.fetch_all(
+                """SELECT gm.message_group_id, gm.sender_id, gm.group_id, gm.content, gm.time_send, u.username as sender_name
                    FROM group_messages gm 
                    JOIN users u ON gm.sender_id = u.id 
                    WHERE gm.group_id = %s 
                    ORDER BY gm.time_send DESC LIMIT %s OFFSET %s""",
                 (group_id, limit, offset)
             )
-            # Chuyển đổi datetime thành string
-            message_list = []
-            for msg in messages:
-                message_list.append({
+            message_list = [
+                {
                     "message_id": msg["message_group_id"],
-                    "sender_id": msg["sender_id"], 
+                    "sender_id": msg["sender_id"],
                     "group_id": msg["group_id"],
                     "content": msg["content"],
                     "time_send": msg["time_send"].isoformat() if msg["time_send"] else None,
                     "sender_name": msg["sender_name"]
-                })
-            return {
-                "success": True,
-                "messages": message_list[::-1]  # Đảo ngược để tin nhắn cũ lên trước
-            }
+                }
+                for msg in messages
+            ]
+            return {"success": True, "messages": message_list[::-1]}
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy tin nhắn: {str(e)}"}
 
-    def get_user_groups(self, user_id: int) -> dict:
+    async def get_user_groups(self, user_id: int) -> dict:
         """Lấy danh sách nhóm của user"""
         try:
-            # Ép kiểu user_id về int nếu là string
             try:
                 user_id = int(user_id)
             except Exception:
                 return {"success": False, "message": "user_id không hợp lệ"}
-            # Kiểm tra user tồn tại
-            user_exists = db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
+
+            user_exists = await db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
             if not user_exists:
                 return {"success": False, "message": "User không tồn tại"}
-            groups = db.fetch_all(
+
+            groups = await db.fetch_all(
                 """SELECT gc.group_id, gc.group_name, gc.created_by, u.username as creator_name
                    FROM group_chat gc
                    JOIN group_members gm ON gc.group_id = gm.group_id
@@ -228,55 +205,47 @@ class GroupHandler:
                    WHERE gm.user_id = %s""",
                 (user_id,)
             )
-            # Đảm bảo groups không phải None
             if groups is None:
                 groups = []
             return {
                 "success": True,
                 "groups": [
                     {
-                        "group_id": group["group_id"],
-                        "group_name": group["group_name"],
-                        "created_by": group["created_by"],
-                        "creator_name": group["creator_name"]
+                        "group_id": g["group_id"],
+                        "group_name": g["group_name"],
+                        "created_by": g["created_by"],
+                        "creator_name": g["creator_name"]
                     }
-                    for group in groups
+                    for g in groups
                 ]
             }
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy danh sách nhóm: {str(e)}"}
 
-    def get_group_members(self, group_id: int, user_id: int = None) -> dict:
+    async def get_group_members(self, group_id: int, user_id: int = None) -> dict:
         """Lấy danh sách thành viên nhóm"""
         try:
-            # Kiểm tra user có quyền xem danh sách thành viên không (nếu user_id được cung cấp)
             if user_id:
-                member_check = db.fetch_one(
+                member_check = await db.fetch_one(
                     "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
                     (group_id, user_id)
                 )
                 if not member_check:
                     return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
-            
-            members = db.fetch_all(
+
+            members = await db.fetch_all(
                 """SELECT u.id, u.username, u.email
                    FROM users u
                    JOIN group_members gm ON u.id = gm.user_id
                    WHERE gm.group_id = %s""",
                 (group_id,)
             )
-            
             return {
                 "success": True,
                 "members": [
-                    {
-                        "user_id": member["id"],
-                        "username": member["username"],
-                        "email": member["email"]
-                    }
-                    for member in members
+                    {"user_id": m["id"], "username": m["username"], "email": m["email"]}
+                    for m in members
                 ]
             }
-            
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy danh sách thành viên: {str(e)}"}

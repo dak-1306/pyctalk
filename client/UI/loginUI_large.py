@@ -38,7 +38,7 @@ class Ui_LoginWindow(object):
         self.titleLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.formLayout.addWidget(self.titleLabel)
 
-        # Email input
+        # Email input (đồng thời gán cho txtUsername để tương thích với code cũ)
         self.txtEmail = QtWidgets.QLineEdit()
         self.txtEmail.setPlaceholderText("Nhập userName...")
         self.txtEmail.setStyleSheet("""
@@ -54,6 +54,7 @@ class Ui_LoginWindow(object):
             }
         """)
         self.formLayout.addWidget(self.txtEmail)
+        self.txtUsername = self.txtEmail  # Thêm dòng này để tương thích với code truy cập txtUsername
 
         # Password input
         self.txtPassword = QtWidgets.QLineEdit()

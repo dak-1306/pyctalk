@@ -1,156 +1,194 @@
+# server/chat_1v1_handler.py
 import json
-import threading
-import time
+import asyncio
 from datetime import datetime
+
 
 class Chat1v1Handler:
     def __init__(self):
-        self.active_chats = {}  # {user1_user2: [client1, client2]}
-        self.user_connections = {}  # {username: client_socket}
-        self.message_history = {}  # {chat_id: [messages]}
-    
-    def handle_message_request(self, client_socket, data):
+        self.active_chats = {}       # {user1_user2: [client1, client2]}
+        self.user_connections = {}   # {username: (reader, writer)}
+        self.message_history = {}    # {chat_id: [messages]}
+
+    async def handle_message_request(self, reader, writer, data: dict):
         """Handle different types of message requests"""
         action = data.get("action")
-        
+
         if action == "send_message":
-            return self.handle_send_message(client_socket, data.get("data", {}))
+            return await self.handle_send_message(writer, data.get("data", {}))
         elif action == "get_chat_history":
-            return self.handle_get_history(client_socket, data.get("data", {}))
+            return await self.handle_get_history(writer, data.get("data", {}))
         elif action == "mark_as_read":
-            return self.handle_mark_read(client_socket, data.get("data", {}))
+            return await self.handle_mark_read(writer, data.get("data", {}))
         else:
             return {"success": False, "message": "Unknown action"}
-    
-    def handle_send_message(self, client_socket, message_data):
-        """Handle sending a message from one user to another"""
+
+    async def handle_send_message(self, writer, message_data: dict):
+        """Handle sending a message from one user to another, lưu vào database"""
         try:
             sender = message_data.get("from")
-            recipient = message_data.get("to") 
+            recipient = message_data.get("to")
             message_text = message_data.get("message")
             message_type = message_data.get("type", "text")
-            
+
             if not all([sender, recipient, message_text]):
                 return {"success": False, "message": "Missing required fields"}
-            
-            # Create chat ID (sorted to ensure consistency)
+
+            # Create chat ID
             chat_id = "_".join(sorted([sender, recipient]))
-            
-            # Create message object
+
+            # Message object
+            now_dt = datetime.now()
+            timestamp_str = now_dt.strftime('%Y-%m-%d %H:%M:%S')
             message_obj = {
-                "id": f"{chat_id}_{int(time.time()*1000)}",
+                "id": f"{chat_id}_{int(asyncio.get_event_loop().time() * 1000)}",
                 "from": sender,
                 "to": recipient,
                 "message": message_text,
                 "type": message_type,
-                "timestamp": datetime.now().isoformat(),
-                "read": False
+                "timestamp": timestamp_str,
+                "read": False,
             }
-            
-            # Store message in history
-            if chat_id not in self.message_history:
-                self.message_history[chat_id] = []
-            self.message_history[chat_id].append(message_obj)
-            
+
+            # Save to history (RAM)
+            self.message_history.setdefault(chat_id, []).append(message_obj)
+
+            # Lưu vào database
+            try:
+                from database.db import db
+                # Lấy user_id từ username
+                sender_row = await db.fetch_one("SELECT id FROM users WHERE username = %s", (sender,))
+                recipient_row = await db.fetch_one("SELECT id FROM users WHERE username = %s", (recipient,))
+                print(f"[DB] sender_row: {sender_row}, recipient_row: {recipient_row}")
+                if sender_row and recipient_row:
+                    print(f"[DB] Lưu tin nhắn: sender_id={sender_row['id']}, receiver_id={recipient_row['id']}, content={message_text}, time_send={timestamp_str}")
+                    await db.execute(
+                        "INSERT INTO private_messages (sender_id, receiver_id, content, time_send) VALUES (%s, %s, %s, %s)",
+                        (sender_row["id"], recipient_row["id"], message_text, timestamp_str)
+                    )
+                    print(f"[DB] Đã lưu tin nhắn vào DB.")
+                else:
+                    print(f"[DB] Không tìm thấy user_id cho sender hoặc recipient.")
+            except Exception as db_exc:
+                print(f"❌ Lỗi lưu tin nhắn vào DB: {db_exc}")
+
             # Send to recipient if online
-            recipient_socket = self.user_connections.get(recipient)
-            if recipient_socket:
+            recipient_conn = self.user_connections.get(recipient)
+            if recipient_conn:
+                _, recipient_writer = recipient_conn
                 try:
                     response = {
                         "action": "receive_message",
-                        "data": message_obj
+                        "data": message_obj,
                     }
-                    recipient_socket.send(json.dumps(response).encode('utf-8'))
+                    recipient_writer.write(
+                        (json.dumps(response) + "\n").encode("utf-8")
+                    )
+                    await recipient_writer.drain()
                 except Exception as e:
-                    print(f"Failed to send message to {recipient}: {e}")
-            
+                    print(f"⚠️ Failed to send message to {recipient}: {e}")
+
             return {
                 "success": True,
                 "message": "Message sent successfully",
-                "message_id": message_obj["id"]
+                "message_id": message_obj["id"],
             }
-            
+
         except Exception as e:
             return {"success": False, "message": f"Error sending message: {str(e)}"}
-    
-    def handle_get_history(self, client_socket, request_data):
+
+    async def handle_get_history(self, writer, request_data: dict):
         """Get chat history between two users"""
         try:
             user1 = request_data.get("user1")
             user2 = request_data.get("user2")
             limit = request_data.get("limit", 50)
-            
+
             if not all([user1, user2]):
                 return {"success": False, "message": "Missing user parameters"}
-            
-            # Create chat ID
-            chat_id = "_".join(sorted([user1, user2]))
-            
-            # Get messages
-            messages = self.message_history.get(chat_id, [])
-            
-            # Return last N messages
-            recent_messages = messages[-limit:] if len(messages) > limit else messages
-            
+
+            # Truy vấn DB để lấy lịch sử tin nhắn giữa user1 và user2
+            from database.db import db
+            # Nếu user1/user2 là id, dùng trực tiếp, nếu là username thì cần truy vấn id
+            # Ở đây giả sử là id
+            query = (
+                "SELECT sender_id, receiver_id, content, time_send "
+                "FROM private_messages "
+                "WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s) "
+                "ORDER BY time_send DESC LIMIT %s"
+            )
+            params = (user1, user2, user2, user1, limit)
+            rows = await db.fetch_all(query, params)
+            messages = []
+            for row in rows:
+                messages.append({
+                    "from": row["sender_id"],
+                    "to": row["receiver_id"],
+                    "message": row["content"],
+                    "timestamp": str(row["time_send"]),
+                })
             return {
                 "success": True,
                 "data": {
-                    "chat_id": chat_id,
-                    "messages": recent_messages,
-                    "total_count": len(messages)
-                }
+                    "chat_id": f"{user1}_{user2}",
+                    "messages": list(reversed(messages)),  # đảo ngược để hiển thị từ cũ đến mới
+                    "total_count": len(messages),
+                },
             }
-            
         except Exception as e:
             return {"success": False, "message": f"Error getting history: {str(e)}"}
-    
-    def handle_mark_read(self, client_socket, request_data):
+
+    async def handle_mark_read(self, writer, request_data: dict):
         """Mark messages as read"""
         try:
             user = request_data.get("user")
             chat_partner = request_data.get("chat_partner")
-            
+
             if not all([user, chat_partner]):
                 return {"success": False, "message": "Missing parameters"}
-            
+
             chat_id = "_".join(sorted([user, chat_partner]))
-            
+
             if chat_id in self.message_history:
-                # Mark all messages from chat_partner as read
                 for message in self.message_history[chat_id]:
                     if message["to"] == user and message["from"] == chat_partner:
                         message["read"] = True
-            
+
             return {"success": True, "message": "Messages marked as read"}
-            
+
         except Exception as e:
             return {"success": False, "message": f"Error marking as read: {str(e)}"}
-    
-    def register_user_connection(self, username, client_socket):
-        """Register user connection for real-time messaging"""
-        self.user_connections[username] = client_socket
-        print(f"User {username} connected for chat")
-    
-    def unregister_user_connection(self, username):
+
+    def register_user_connection(self, username: str, writer):
+        """Register user connection"""
+        self.user_connections[username] = (None, writer)
+        print(f"✅ User {username} connected for chat")
+
+    def unregister_user_connection(self, username: str):
         """Unregister user connection"""
         if username in self.user_connections:
+            _, writer = self.user_connections[username]
+            try:
+                writer.close()
+                asyncio.create_task(writer.wait_closed())
+            except Exception:
+                pass
             del self.user_connections[username]
-            print(f"User {username} disconnected from chat")
-    
+            print(f"❌ User {username} disconnected from chat")
+
     def get_online_users(self):
         """Get list of currently online users"""
         return list(self.user_connections.keys())
-    
-    def get_unread_count(self, username):
+
+    def get_unread_count(self, username: str) -> int:
         """Get count of unread messages for a user"""
         unread_count = 0
-        
         for chat_id, messages in self.message_history.items():
             for message in messages:
                 if message["to"] == username and not message["read"]:
                     unread_count += 1
-        
         return unread_count
 
-# Global instance to be used by the server
+
+# Global instance
 chat_handler = Chat1v1Handler()

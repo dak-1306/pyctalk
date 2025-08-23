@@ -1,18 +1,20 @@
-from PyQt6.QtCore import QThread, pyqtSignal
+import asyncio
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-class GroupMessageSenderThread(QThread):
-    """Thread gửi tin nhắn nhóm (không block UI)"""
+class GroupMessageSender(QObject):
+    """Async gửi tin nhắn nhóm (không block UI)"""
     message_sent = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, client, request_data):
-        super().__init__()
+    def __init__(self, client, parent=None):
+        super().__init__(parent)
         self.client = client
-        self.request_data = request_data
 
-    def run(self):
+    @pyqtSlot(dict)
+    async def send_message(self, request_data: dict):
         try:
-            response = self.client.send_json(self.request_data)
+            # Gửi request async (client cần hỗ trợ asyncio)
+            response = await self.client.send_json(request_data)
             if response:
                 self.message_sent.emit(response)
             else:

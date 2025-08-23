@@ -1,25 +1,39 @@
-# server/connection_handler.py
-import socket
-import threading
+# server/connection_handler_async.py
+import asyncio
 from server.client_session import ClientSession
 
-class ConnectionHandler:
-    def __init__(self, host='127.0.0.1', port=9000):
+
+class ConnectionHandlerAsync:
+    def __init__(self, host="127.0.0.1", port=9000):
         self.host = host
         self.port = port
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server = None
 
-    def start(self):
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen()
-        print(f"📡 Server listening on {self.host}:{self.port}")
+    async def handle_client(self, reader, writer):
+        client_address = writer.get_extra_info("peername")
+        print(f"🔗 New connection from {client_address}")
 
-        while True:
-            client_socket, client_address = self.server_socket.accept()
-            print(f"🔗 New connection from {client_address}")
-            
-            client_session = ClientSession(client_socket, client_address)
-            thread = threading.Thread(target=client_session.run)
-            thread.daemon = True
-            thread.start()
-server = ConnectionHandler()
+        # Tạo ClientSession async
+        client_session = ClientSession(reader, writer, client_address)
+        await client_session.run()  # giả sử ClientSession cũng được viết async
+
+    async def start(self):
+        self.server = await asyncio.start_server(
+            self.handle_client, self.host, self.port
+        )
+        addr = self.server.sockets[0].getsockname()
+        print(f"📡 Async Server listening on {addr}")
+
+        async with self.server:
+            await self.server.serve_forever()
+
+
+# Khởi tạo server
+server = ConnectionHandlerAsync()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(server.start())
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped manually.")

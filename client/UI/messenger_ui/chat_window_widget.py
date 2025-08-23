@@ -1,7 +1,10 @@
+import asyncio
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
 from .message_bubble_widget import MessageBubble
+
+
 
 
 class ChatWindow(QtWidgets.QWidget):
@@ -10,10 +13,12 @@ class ChatWindow(QtWidgets.QWidget):
     message_sent = pyqtSignal(str)  # Signal when message is sent
     
     def __init__(self, chat_data=None, parent=None, pyctalk_client=None, **kwargs):
+        print("[DEBUG] ChatWindow.__init__ called")
         super().__init__(parent)
         # Xử lý dữ liệu chat
         if chat_data is not None:
             self.chat_data = chat_data
+            pass
         else:
             self.chat_data = {
                 'friend_name': kwargs.get('friend_username', 'Friend'),
@@ -23,17 +28,36 @@ class ChatWindow(QtWidgets.QWidget):
                 'last_message': kwargs.get('last_message', ''),
                 'unread_count': kwargs.get('unread_count', 0)
             }
-        # Tích hợp Chat1v1Client
-        from Chat1_1.chat1v1_client import Chat1v1Client
+        print(f"[DEBUG] ChatWindow: current_user_id={self.chat_data.get('current_user_id')}, friend_id={self.chat_data.get('friend_id')}")
+        from Chat1_1.chat1v1_api_client import Chat1v1APIClient
+        from Chat1_1.chat1v1_logic import Chat1v1Logic
         self.pyctalk_client = pyctalk_client
-        self.chat1v1_client = None
-        if self.pyctalk_client:
-            self.chat1v1_client = Chat1v1Client(self.pyctalk_client, self.on_receive_message)
-            self.chat1v1_client.start_listen()
+        print(f"[DEBUG] ChatWindow.__init__: pyctalk_client={self.pyctalk_client}")
+        self.chat1v1_api_client = Chat1v1APIClient(self.pyctalk_client) if self.pyctalk_client else None
+        self.logic = Chat1v1Logic(self, self.chat1v1_api_client, int(self.chat_data.get('current_user_id')), int(self.chat_data.get('friend_id'))) if self.chat1v1_api_client else None
         self._setup_ui()
-        # Không load sample, chỉ load khi không có client
-        if not self.chat1v1_client:
+        if self.logic:
+            # Chỉ gọi load_message_history khi nhận đúng dữ liệu từ server
+            asyncio.create_task(self._load_history_async())
+        else:
             self._load_sample_messages()
+
+    async def _load_history_async(self):
+        await self.logic.load_message_history()
+
+    async def _fetch_and_load_history(self):
+        try:
+            messages_response = await self.chat1v1_api_client.get_chat_history(
+                self.chat_data.get('current_user_id', None),
+                self.chat_data.get('friend_id', None),
+                50
+            )
+            messages = messages_response.get('messages', []) if messages_response and isinstance(messages_response, dict) else []
+            print(f"[DEBUG] ChatWindow.__init__: messages from API: {messages}")
+            # Luôn gọi load_message_history để UI cập nhật trạng thái
+            self.load_message_history(messages)
+        except Exception as e:
+            print(f"Error loading message history from API in ChatWindow: {e}")
         
     def _setup_ui(self):
         """Setup chat window UI"""
@@ -290,7 +314,8 @@ class ChatWindow(QtWidgets.QWidget):
                 border: 2px solid #0084FF;
             }
         """)
-        txt_message.returnPressed.connect(self.send_message)
+        import asyncio
+        txt_message.returnPressed.connect(lambda: asyncio.create_task(self.send_message()))
         return txt_message
     
     def _create_emoji_button(self):
@@ -331,7 +356,8 @@ class ChatWindow(QtWidgets.QWidget):
             }
         """)
         btn_send.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_send.clicked.connect(self.send_message)
+        import asyncio
+        btn_send.clicked.connect(lambda: asyncio.create_task(self.send_message()))
         return btn_send
     
     def _load_sample_messages(self):
@@ -373,20 +399,19 @@ class ChatWindow(QtWidgets.QWidget):
         scrollbar = self.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
     
-    def send_message(self):
+    async def send_message(self):
         """Gửi tin nhắn qua server"""
         text = self.txt_message.text().strip()
         if not text:
             return
-        # Gửi tin nhắn qua Chat1v1Client nếu có
-        if self.chat1v1_client:
-            to_username = self.chat_data.get('friend_name')
-            result = self.chat1v1_client.send_message(to_username, text)
-            if result and result.get('success'):
-                self.add_message(text, True)
-                self.message_sent.emit(text)
+        # Gửi tin nhắn qua logic nếu có
+        if self.logic:
+            response = await self.logic.send_message(text)
+            if response and response.get('success'):
+                QtCore.QTimer.singleShot(0, lambda: self.add_message(text, True))
+                QtCore.QTimer.singleShot(0, lambda: self.message_sent.emit(text))
             else:
-                QtWidgets.QMessageBox.warning(self, "Lỗi gửi tin nhắn", "Không gửi được tin nhắn!")
+                QtCore.QTimer.singleShot(0, lambda: QtWidgets.QMessageBox.warning(self, "Lỗi gửi tin nhắn", "Không gửi được tin nhắn!"))
         else:
             # Demo offline
             self.add_message(text, True)
@@ -426,7 +451,35 @@ class ChatWindow(QtWidgets.QWidget):
     
     def load_message_history(self, messages):
         """Load message history from database"""
+        print(f"[DEBUG] ChatWindow.load_message_history: messages received: {messages}")
         self.clear_messages()
-        for msg in messages:
-            is_sent = msg.get('sender_id') == self.chat_data.get('current_user_id')
-            self.add_message(msg.get('content', ''), is_sent)
+        if not messages or not isinstance(messages, list) or len(messages) == 0:
+            print("[WARNING] Không có lịch sử tin nhắn hoặc dữ liệu sai!")
+            # Hiển thị thông báo trên UI
+            label = QtWidgets.QLabel("Không có lịch sử tin nhắn.")
+            label.setStyleSheet("color: #888; font-size: 16px; padding: 20px;")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.messages_layout.addWidget(label)
+            self.messages_layout.addStretch()
+            return
+        print(f"[INFO] Số lượng tin nhắn sẽ hiển thị: {len(messages)}")
+        for idx, msg in enumerate(messages):
+            # Kiểm tra dữ liệu từng tin nhắn
+            if not isinstance(msg, dict):
+                print(f"[WARNING] Tin nhắn không phải dict: {msg}")
+                continue
+            sender_id = msg.get('from')
+            content = msg.get('message', msg.get('content', ''))
+            try:
+                sender_id_int = int(sender_id)
+                current_user_id_int = int(self.chat_data.get('current_user_id'))
+            except Exception:
+                sender_id_int = sender_id
+                current_user_id_int = self.chat_data.get('current_user_id')
+            print(f"[DEBUG] Tin nhắn #{idx}: from={sender_id_int}, content={content}, current_user_id={current_user_id_int}")
+            if sender_id is None or content == '':
+                print(f"[WARNING] Tin nhắn thiếu dữ liệu: {msg}")
+                continue
+            is_sent = sender_id_int == current_user_id_int
+            print(f"[DEBUG] add_message(content={content}, is_sent={is_sent})")
+            self.add_message(content, is_sent)
