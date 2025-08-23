@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PycTalk — Đăng nhập</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f172a; /* slate-900 */
+        --bg2: #111827; /* gray-900 */
+        --card: #0b1224cc; /* glass */
+        --muted: #94a3b8; /* slate-400 */
+        --text: #e5e7eb; /* gray-200 */
+        --white: #ffffff;
+        --brand: #60a5fa; /* blue-400 */
+        --brand-strong: #3b82f6; /* blue-500 */
+        --ring: #93c5fd; /* sky-300 */
+        --success: #22c55e; /* green-500 */
+        --error: #ef4444; /* red-500 */
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--text);
+        background: radial-gradient(
+            1200px 800px at 10% 20%,
+            #1d243d 0%,
+            transparent 60%
+          ),
+          radial-gradient(900px 700px at 90% 10%, #1c2737 0%, transparent 55%),
+          radial-gradient(1000px 700px at 50% 100%, #0b1730 0%, transparent 60%),
+          linear-gradient(135deg, var(--bg) 0%, var(--bg2) 100%);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      /* floating orbs */
+      .orb {
+        position: fixed;
+        filter: blur(60px);
+        opacity: 0.35;
+        pointer-events: none;
+        mix-blend-mode: screen;
+      }
+      .orb.one {
+        width: 480px;
+        height: 480px;
+        background: #43b1ff;
+        top: -80px;
+        left: -80px;
+        animation: float 18s ease-in-out infinite;
+      }
+      .orb.two {
+        width: 420px;
+        height: 420px;
+        background: #7c3aed;
+        bottom: -120px;
+        right: -60px;
+        animation: float 22s ease-in-out infinite reverse;
+      }
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-20px);
+        }
+      }
+
+      .wrapper {
+        width: 100%;
+        max-width: 1060px;
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 28px;
+        align-items: stretch;
+      }
+
+      @media (max-width: 900px) {
+        .wrapper {
+          grid-template-columns: 1fr;
+          max-width: 520px;
+        }
+      }
+
+      .card {
+        position: relative;
+        background: var(--card);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+      }
+      .card .inner {
+        padding: 28px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        color: var(--white);
+        box-shadow: 0 6px 18px rgba(59, 130, 246, 0.45);
+      }
+      .brand h1 {
+        font-size: 18px;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+
+      .headline {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 2px 0 6px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 22px;
+        line-height: 1.6;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+      label {
+        font-size: 14px;
+        color: #cbd5e1;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: #0b1229;
+        border: 1.5px solid rgba(148, 163, 184, 0.25);
+        border-radius: 12px;
+        transition: 0.2s ease;
+        outline: none;
+      }
+      .input:focus-within {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.16);
+      }
+      .input input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text);
+        font-size: 15px;
+      }
+      .input button.icon {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: #cbd5e1;
+        font-size: 15px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 2px;
+      }
+      .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #cbd5e1;
+        font-size: 14px;
+      }
+      .checkbox input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--brand-strong);
+      }
+
+      .btn {
+        width: 100%;
+        padding: 12px 16px;
+        border: none;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        transition: 0.2s ease;
+      }
+      .btn.primary {
+        background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+        color: var(--white);
+        box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35);
+      }
+      .btn.primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 28px rgba(59, 130, 246, 0.45);
+      }
+      .btn.ghost {
+        background: transparent;
+        border: 1.5px solid rgba(148, 163, 184, 0.28);
+        color: #d1d5db;
+      }
+      .btn.ghost:hover {
+        border-color: #e5e7eb;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .links {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        font-size: 14px;
+        color: #cbd5e1;
+        margin-top: 12px;
+      }
+      .links a {
+        color: var(--brand);
+        text-decoration: none;
+      }
+      .links a:hover {
+        text-decoration: underline;
+      }
+
+      .note {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #0d1a33;
+        border: 1px dashed rgba(147, 197, 253, 0.35);
+        color: #cfe5ff;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+      }
+
+      /* Right panel */
+      .promo {
+        overflow: hidden;
+        display: grid;
+      }
+      .promo .inner {
+        padding: 28px;
+        display: grid;
+        align-content: space-between;
+        gap: 22px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(96, 165, 250, 0.15);
+        color: #cfe5ff;
+        border: 1px solid rgba(147, 197, 253, 0.25);
+      }
+      .hero {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(
+          180deg,
+          rgba(96, 165, 250, 0.18),
+          rgba(96, 165, 250, 0.04)
+        );
+        padding: 18px;
+      }
+      .hero h3 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .hero p {
+        margin: 0;
+        color: #cbd5e1;
+      }
+      .bullets {
+        display: grid;
+        gap: 12px;
+      }
+      .bullets li {
+        list-style: none;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        color: #cbd5e1;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+        border-radius: 999px;
+        margin-top: 8px;
+      }
+
+      /* Error & success toasts */
+      .toast {
+        display: none;
+        margin-top: 4px;
+        font-size: 13px;
+        padding: 10px 12px;
+        border-radius: 10px;
+      }
+      .toast.error {
+        background: rgba(239, 68, 68, 0.1);
+        color: #fecaca;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+      }
+      .toast.success {
+        background: rgba(34, 197, 94, 0.1);
+        color: #bbf7d0;
+        border: 1px solid rgba(34, 197, 94, 0.35);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="orb one"></div>
+    <div class="orb two"></div>
+
+    <div class="wrapper">
+      <!-- Left: Login card -->
+      <section class="card">
+        <div class="inner">
+          <div class="brand">
+            <div class="logo">P</div>
+            <h1>PycTalk</h1>
+          </div>
+
+          <h2 class="headline">Chào mừng trở lại 👋</h2>
+          <p class="sub">
+            Đăng nhập để tiếp tục trò chuyện với bạn bè. Bảo mật 2 lớp & đồng bộ
+            đa thiết bị.
+          </p>
+
+          <form id="loginForm" novalidate>
+            <div class="field">
+              <label for="username">Tên đăng nhập</label>
+              <div class="input">
+                <input
+                  id="username"
+                  name="username"
+                  placeholder="vd: phuong.tran"
+                  required
+                  autocomplete="username"
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password">Mật khẩu</label>
+              <div class="input">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                  autocomplete="current-password"
+                />
+                <button
+                  class="icon"
+                  type="button"
+                  aria-label="Hiện/ẩn mật khẩu"
+                  id="togglePw"
+                >
+                  👁️
+                </button>
+              </div>
+              <div class="toast error" id="pwHint" role="alert">
+                Mật khẩu cần tối thiểu 6 ký tự.
+              </div>
+            </div>
+
+            <div class="row">
+              <label class="checkbox"
+                ><input type="checkbox" id="remember" /> Ghi nhớ tôi</label
+              >
+              <a href="#" style="color: var(--brand); text-decoration: none"
+                >Quên mật khẩu?</a
+              >
+            </div>
+
+            <button class="btn primary" type="submit">Đăng nhập</button>
+            <button class="btn ghost" type="button" onclick="demoFill()">
+              Dùng tài khoản demo
+            </button>
+          </form>
+
+          <div class="links">
+            <span>Chưa có tài khoản?</span>
+            <a href="#">Tạo tài khoản</a>
+          </div>
+
+          <div class="note" style="margin-top: 16px">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+            <span>Mẹo: Bạn có thể nhấn tab để điền nhanh các ô.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Promo / feature highlights -->
+      <aside class="card promo">
+        <div class="inner">
+          <div>
+            <span class="tag">🔒 Mã hoá đầu cuối</span>
+            <div class="hero" style="margin-top: 14px">
+              <h3>Nhanh, gọn, bảo mật.</h3>
+              <p>
+                Kết nối ngay lập tức với độ trễ thấp. Tối ưu cho cả máy cấu hình
+                yếu.
+              </p>
+            </div>
+          </div>
+          <ul class="bullets">
+            <li>
+              <span class="dot"></span>
+              <div>
+                <strong>Đồng bộ đa nền tảng</strong><br />
+                Web • Desktop • Mobile
+              </div>
+            </li>
+            <li>
+              <span class="dot"></span>
+              <div>
+                <strong>Chủ đề tối/sáng</strong><br />
+                Tuỳ chỉnh màu sắc theo sở thích của bạn
+              </div>
+            </li>
+            <li>
+              <span class="dot"></span>
+              <div>
+                <strong>Nhẹ và mượt</strong><br />
+                Giao diện glassmorphism hiện đại, hiệu năng cao
+              </div>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      // Show/Hide password
+      const pw = document.getElementById("password");
+      const togglePw = document.getElementById("togglePw");
+      togglePw.addEventListener("click", () => {
+        pw.type = pw.type === "password" ? "text" : "password";
+        togglePw.textContent = pw.type === "password" ? "👁️" : "🙈";
+      });
+
+      // Tiny validation demo
+      const form = document.getElementById("loginForm");
+      const pwHint = document.getElementById("pwHint");
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const u = document.getElementById("username").value.trim();
+        const p = pw.value;
+        pwHint.style.display = p.length > 0 && p.length < 6 ? "block" : "none";
+        if (!u || p.length < 6) {
+          return;
+        }
+        // Fake success toast effect
+        const ok = document.createElement("div");
+        ok.className = "toast success";
+        ok.textContent = "Đăng nhập hợp lệ! (demo)";
+        ok.style.display = "block";
+        form.after(ok);
+        setTimeout(() => ok.remove(), 2500);
+      });
+
+      // Demo fill
+      function demoFill() {
+        document.getElementById("username").value = "demo.user";
+        pw.value = "demopass";
+      }
+      window.demoFill = demoFill;
+    </script>
+  </body>
+</html>

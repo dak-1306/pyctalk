@@ -19,10 +19,7 @@ class LoginWindow(QtWidgets.QMainWindow):
         # Kết nối nút login (async)
         self.ui.btnLogin.clicked.connect(lambda: asyncio.create_task(self.handle_login()))
 
-        # Cho nhãn "Create an Account?" thành clickable
-        self.ui.creatAccount.setText('<a href="#">Create an Account?</a>')
-        self.ui.creatAccount.setOpenExternalLinks(False)
-        self.ui.creatAccount.linkActivated.connect(self.open_register_window)
+    # Không cần creatAccount nữa, đã có link đăng ký ở giao diện mới
     
     async def handle_login(self):
         username = self.ui.txtUsername.text()
