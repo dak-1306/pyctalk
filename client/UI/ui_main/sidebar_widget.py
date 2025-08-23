@@ -1,7 +1,5 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 import asyncio
-
-
 class SidebarWidget(QtWidgets.QFrame):
     def __init__(self, has_friends_ui, client, user_id, username, parent=None):
         super().__init__(parent)
@@ -37,7 +35,8 @@ class SidebarWidget(QtWidgets.QFrame):
 
     def _setup_friends_tab(self):
         try:
-            from UI.messenger_ui.friend_list_window import FriendListWindow
+            from client.UI.messenger_ui.friend_list_window import FriendListWindow
+            print(f"[DEBUG][SidebarWidget] Khởi tạo FriendListWindow với username={self.username}, user_id={self.user_id}, client={self.client}")
             self.friends_widget = FriendListWindow(
                 self.username, user_id=self.user_id, client=self.client
             )
@@ -46,7 +45,8 @@ class SidebarWidget(QtWidgets.QFrame):
             f_lay.setContentsMargins(0, 0, 0, 0)
             f_lay.addWidget(self.friends_widget)
             self.tabWidget.addTab(friends_tab, "👥 Bạn bè")
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR][SidebarWidget] Lỗi khi import/khởi tạo FriendListWindow: {e}")
             self._setup_fallback_friends_tab()
 
     def _setup_fallback_friends_tab(self):
@@ -108,11 +108,8 @@ class SidebarWidget(QtWidgets.QFrame):
                 print(f"[ERROR][Sidebar] Lỗi tải nhóm: {e}")
 
         import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(load_groups())
-        except RuntimeError:
-            asyncio.run(load_groups())
+        loop = asyncio.get_running_loop()
+        loop.create_task(load_groups())
 
         # Action buttons trong tab nhóm
         group_actions = QtWidgets.QHBoxLayout()

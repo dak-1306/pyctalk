@@ -1,8 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
-
-
 class ChatListItem(QtWidgets.QFrame):
     """Individual chat list item with modern design"""
     

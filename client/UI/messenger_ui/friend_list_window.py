@@ -2,17 +2,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
 from .chat_list_item_widget import ChatListItem
-
-# Thêm đường dẫn thư mục gốc để import được package database
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) )
-
-try:
-    from database.messenger_db import MessengerDatabase
-except ImportError:
-    MessengerDatabase = None
-
-
 class FriendListWindow(QtWidgets.QWidget):
     """Friend list window for messenger"""
     
@@ -22,6 +11,7 @@ class FriendListWindow(QtWidgets.QWidget):
         super().__init__(parent)
         self.username = username
         self.current_user_id = user_id
+        print(f"[DEBUG][FriendListWindow] __init__ username={username}, user_id={user_id}, client={client}")
         # Nếu client chưa truyền vào, thử lấy từ parent (nếu có)
         if client is not None:
             self.client = client
@@ -29,6 +19,7 @@ class FriendListWindow(QtWidgets.QWidget):
             self.client = parent.client
         else:
             self.client = None
+        print(f"[DEBUG][FriendListWindow] self.client={self.client}")
         self._setup_ui()
         import asyncio
         asyncio.create_task(self._load_conversations())
@@ -132,18 +123,20 @@ class FriendListWindow(QtWidgets.QWidget):
     
     async def _load_conversations(self):
         """Lấy danh sách bạn bè từ server qua FriendClient (callback, không khởi động lại listen_loop)"""
+        print(f"[DEBUG][FriendListWindow] _load_conversations called, self.client={self.client}")
         if self.client is None:
-            print("Không tìm thấy client để lấy danh sách bạn bè. Hãy truyền client khi khởi tạo FriendListWindow.")
+            print("[ERROR][FriendListWindow] Không tìm thấy client để lấy danh sách bạn bè. Hãy truyền client khi khởi tạo FriendListWindow.")
             self._display_conversations([])
             return
         try:
             from Add_friend.friend import FriendClient
             friend_client = FriendClient(self.client)
-            print(f"[DEBUG] friend_client.get_friends type: {type(friend_client.get_friends)} value: {friend_client.get_friends}")
+            print(f"[DEBUG][FriendListWindow] friend_client.get_friends type: {type(friend_client.get_friends)} value: {friend_client.get_friends}")
 
             async def friends_callback(response):
-                print(f"[DEBUG] get_friends response type: {type(response)} value: {response}")
+                print(f"[DEBUG][FriendListWindow] get_friends response type: {type(response)} value: {response}")
                 friends = response.get("data", []) if response and isinstance(response, dict) and response.get("success") else []
+                print(f"[DEBUG][FriendListWindow] friends={friends}")
                 conversations = []
                 for friend in friends:
                     # Nếu server trả về dict với id và name
@@ -151,12 +144,12 @@ class FriendListWindow(QtWidgets.QWidget):
                         friend_id = friend.get('id') or friend.get('friend_id')
                         friend_display_name = friend.get('name') or friend.get('friend_name') or str(friend_id)
                     else:
-                        # Nếu chỉ trả về tên, KHÔNG tạo id tạm bằng hash, bỏ qua bạn bè không có id
-                        print(f"[WARNING] Friend không có id, bỏ qua: {friend}")
+                        print(f"[WARNING][FriendListWindow] Friend không có id, bỏ qua: {friend}")
                         continue
                     if not friend_id:
-                        print(f"[WARNING] Friend không có id hợp lệ, bỏ qua: {friend}")
+                        print(f"[WARNING][FriendListWindow] Friend không có id hợp lệ, bỏ qua: {friend}")
                         continue
+                    print(f"[DEBUG][FriendListWindow] Thêm bạn: id={friend_id}, name={friend_display_name}")
                     conversations.append({
                         'friend_id': friend_id,
                         'friend_name': friend_display_name,
@@ -164,11 +157,12 @@ class FriendListWindow(QtWidgets.QWidget):
                         'last_message_time': '',
                         'unread_count': 0
                     })
+                print(f"[DEBUG][FriendListWindow] conversations={conversations}")
                 self._display_conversations(conversations)
 
             await friend_client.get_friends(friends_callback)
         except Exception as e:
-            print(f"Error loading friends: {e}")
+            print(f"[ERROR][FriendListWindow] Error loading friends: {e}")
             self._display_conversations([])
     
     # Đã bỏ dữ liệu mẫu, chỉ dùng dữ liệu thật từ database

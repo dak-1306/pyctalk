@@ -1,45 +1,38 @@
 import logging
+import sys
+import os
+from typing import Optional, Dict
 from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import pyqtSignal, QTimer, QPropertyAnimation
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import pyqtSignal, QTimer
-from UI.ui_main.topbar_widget import TopBarWidget
-from UI.ui_main.sidebar_widget import SidebarWidget
-logger = logging.getLogger(__name__)
-
-# Thêm đường dẫn thư mục gốc để import được package database
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
+# UI widgets
+from client.UI.ui_main.topbar_widget import TopBarWidget
+from client.UI.ui_main.sidebar_widget import SidebarWidget
+from client.UI.ui_main.main_card_widget import MainCardWidget
+from client.Group_chat.embedded_group_chat_widget import EmbeddedGroupChatWidget
+# Logic/helpers
 from .status_thread import StatusUpdateThread
 from .settings_manager import SettingsManager
 from .notification_manager import NotificationManager
 from .animation_helper import AnimationHelper
-from Group_chat.group_chat_window import GroupChatWindow
-from UI.ui_main.embedded_group_chat_widget import EmbeddedGroupChatWidget
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import QPropertyAnimation
-from Group_chat.group_api_client import GroupAPIClient
-from typing import Optional, Dict
-from Group_chat.group_chat_logic import GroupChatLogic
+# Group chat
+from client.Group_chat.group_chat_window import GroupChatWindow
+logger = logging.getLogger(__name__)
+# Ensure root path for database imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 class Ui_MainWindow(QtCore.QObject):
-    # Signals
+    """Main UI class for PycTalk application"""
     user_status_changed = pyqtSignal(bool)
     theme_changed = pyqtSignal(str)
-    
+
     def __init__(self, username: str, client, main_window: QtWidgets.QMainWindow):
         super().__init__()
         self.username = username
         self.client = client
         self.main_window = main_window
-        # Tự động lấy user_id từ client nếu có
-        self.user_id = None
-        if hasattr(client, 'get_user_id'):
-            try:
-                self.user_id = int(client.get_user_id())
-            except Exception:
-                self.user_id = None
+        self.user_id = self._get_user_id_from_client(client)
         self.group_chat_window: Optional[GroupChatWindow] = None
         self.settings = SettingsManager()
         self.notification_manager = NotificationManager(main_window)
@@ -49,33 +42,33 @@ class Ui_MainWindow(QtCore.QObject):
         self.connection_timer = QTimer()
         self.connection_timer.timeout.connect(self._check_connection_status)
         self.current_theme = self.settings.get("theme", "light")
+
+    def _get_user_id_from_client(self, client):
+        if hasattr(client, 'get_user_id'):
+            try:
+                return int(client.get_user_id())
+            except Exception:
+                return None
+        return None
         
     def setupUi(self, MainWindow: QtWidgets.QMainWindow):
         """Setup the complete UI with enhanced features"""
-        has_friends_ui = True  # Đã dùng SidebarWidget với FriendListWindow, không cần import Ui_FriendsWindow
-            
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(900, 650)
         MainWindow.setMinimumSize(700, 500)
-        
-        # Enhanced window properties
         MainWindow.setWindowFlags(
-            MainWindow.windowFlags() | 
+            MainWindow.windowFlags() |
             QtCore.Qt.WindowType.WindowMinMaxButtonsHint |
             QtCore.Qt.WindowType.WindowCloseButtonHint
         )
-        
         self._setup_central_widget(MainWindow)
-        self._setup_sidebar(has_friends_ui)
+        self._setup_sidebar(True)
         self._setup_main_content()
         self._setup_status_bar(MainWindow)
         self._setup_menu_bar(MainWindow)
         self._connect_signals()
         self._apply_theme()
-        
-        # Start background services
         self._start_status_monitoring()
-        
         logger.info("UI setup completed successfully")
     
     def _setup_central_widget(self, MainWindow):
@@ -90,66 +83,64 @@ class Ui_MainWindow(QtCore.QObject):
         MainWindow.setCentralWidget(self.centralwidget)
     
     def _setup_sidebar(self, has_friends_ui: bool):
-        """Setup enhanced sidebar using SidebarWidget"""
+        """Setup sidebar with friend list and group list"""
         self.sidebar = SidebarWidget(
             has_friends_ui,
             self.client,
             self.user_id,
             self.username
         )
-        # Kết nối signal mở khung chat 1-1
+        # Connect friend selection signal
         if hasattr(self.sidebar, 'friends_widget') and hasattr(self.sidebar.friends_widget, 'friend_selected'):
             self.sidebar.friends_widget.friend_selected.connect(self._open_chat_window_1v1)
-        # Gán các thuộc tính cần thiết để tương thích với code cũ
+        # Expose sidebar attributes for compatibility
         self.tabWidget = self.sidebar.tabWidget
         self.groups_list = self.sidebar.groups_list
         self.btnGroupChat = self.sidebar.btnGroupChat
         self.btnSettings = self.sidebar.btnSettings
         self.outer_layout.addWidget(self.sidebar)
     def _open_chat_window_1v1(self, chat_data):
-        """Mở khung chat 1-1 khi chọn bạn bè, chỉ hiển thị một khung chat duy nhất"""
-        from UI.messenger_ui.chat_window_widget import ChatWindow
-        # Xóa tất cả widget con khỏi main_layout (trừ topbar)
+        """Open 1-1 chat window when a friend is selected"""
+        from client.Chat1_1.chat_window_widget import ChatWindow
+        from client.Chat1_1.chat1v1_client import Chat1v1Client
+        # Remove all widgets except topbar
         for i in reversed(range(self.main_layout.count())):
             item = self.main_layout.itemAt(i)
             widget = item.widget()
             if widget and widget != self.topbar:
                 self.main_layout.removeWidget(widget)
                 widget.setParent(None)
-        # Đảm bảo current_user_id được truyền vào chat_data
-        if 'current_user_id' not in chat_data or chat_data['current_user_id'] is None:
-            chat_data['current_user_id'] = self.user_id
-        # Đảm bảo current_user_id là số nguyên
+        # Ensure current_user_id is set
+        chat_data['current_user_id'] = chat_data.get('current_user_id', self.user_id)
         try:
             chat_data['current_user_id'] = int(chat_data['current_user_id'])
         except Exception:
             pass
-        # Thêm khung chat mới
         chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
+        # Initialize Chat1v1Client to connect logic and load message history
+        self.chat1v1_client = Chat1v1Client(
+            chat_window,
+            pyctalk_client=self.client,
+            current_user_id=chat_data['current_user_id'],
+            friend_id=chat_data.get('friend_id', 1)
+        )
         self.main_layout.addWidget(chat_window)
         chat_window.show()
-        # Lịch sử tin nhắn sẽ được ChatWindow tự động lấy qua API client (async), không cần gọi trực tiếp ở đây nữa.
 
     def _setup_main_content(self):
-        """Setup main content area with enhanced features"""
+        """Setup main content area"""
         self.main_content = QtWidgets.QWidget()
         self.main_content.setObjectName("main_content")
         self.main_layout = QtWidgets.QVBoxLayout(self.main_content)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(12)
-        
-        # Enhanced topbar
         self._setup_topbar()
-        
-        # Main card with welcome content
         self._setup_main_card()
-        
         self.outer_layout.addWidget(self.main_content, 1)
     
     def _setup_topbar(self):
-        """Setup enhanced topbar using TopBarWidget"""
+        """Setup topbar widget"""
         self.topbar = TopBarWidget(self.username)
-        # Gán các thuộc tính cần thiết để tương thích với code cũ
         self.status_indicator = self.topbar.status_indicator
         self.btnThemeToggle = self.topbar.btnThemeToggle
         self.btnLogout = self.topbar.btnLogout
@@ -192,8 +183,7 @@ class Ui_MainWindow(QtCore.QObject):
         layout.addWidget(self.btnLogout)
     
     def _setup_main_card(self):
-        """Setup main welcome card using MainCardWidget"""
-        from UI.ui_main.main_card_widget import MainCardWidget
+        """Setup main welcome card"""
         card_container = QtWidgets.QWidget()
         container_layout = QtWidgets.QVBoxLayout(card_container)
         container_layout.addStretch(1)
@@ -569,6 +559,7 @@ class Ui_MainWindow(QtCore.QObject):
     def toggle_theme(self):
         """Toggle between light and dark theme"""
         new_theme = "dark" if self.current_theme == "light" else "light"
+        self.change_theme(new_theme)
     def on_create_group_clicked(self):
         # Bước 1: Nhập tên nhóm
         group_name, ok = QtWidgets.QInputDialog.getText(

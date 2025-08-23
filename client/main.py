@@ -3,7 +3,7 @@ import os
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PyQt6.QtCore import QLoggingCategory
-from Login.login_signIn import LoginWindow
+from client.Login.login_signIn import LoginWindow
 
 # Suppress Qt font warnings
 os.environ['QT_LOGGING_RULES'] = 'qt.qpa.fonts.warning=false'

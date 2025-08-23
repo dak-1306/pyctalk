@@ -3,10 +3,10 @@ import asyncio
 import qasync
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
-from UI.ui_main.ui_main_window import Ui_MainWindow
-from UI.loginUI_large import Ui_LoginWindow
-from UI.signinUI_large import Ui_SignInWindow
-from Request.handle_request_client import AsyncPycTalkClient
+from client.UI.ui_main.ui_main_window import Ui_MainWindow
+from client.UI.loginUI_large import Ui_LoginWindow
+from client.UI.signinUI_large import Ui_SignInWindow
+from client.Request.handle_request_client import AsyncPycTalkClient
 
 
 class LoginWindow(QtWidgets.QMainWindow):

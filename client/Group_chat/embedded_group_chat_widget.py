@@ -1,7 +1,7 @@
 import logging
 from PyQt6 import QtCore, QtGui, QtWidgets
-from Group_chat.group_api_client import GroupAPIClient
-from Group_chat.group_chat_logic import GroupChatLogic
+from client.Group_chat.group_api_client import GroupAPIClient
+from client.Group_chat.group_chat_logic import GroupChatLogic
 import asyncio
 
 logger = logging.getLogger(__name__)

@@ -3,6 +3,38 @@ import json
 
 
 class AsyncPycTalkClient:
+    async def send_request(self, action, data):
+        """
+        Chuẩn hóa API cho chat 1-1: get_chat_history, send_message
+        action: tên hành động ("get_chat_history", "send_message", ...)
+        data: dict chứa tham số
+        """
+        # Map action sang format request
+        if action == "get_chat_history":
+            request = {
+                "action": "get_chat_history",
+                "data": {
+                    "user_id": data.get("user_id"),
+                    "friend_id": data.get("friend_id"),
+                    "limit": data.get("limit", 50)
+                }
+            }
+        elif action == "send_message":
+            request = {
+                "action": "send_message",
+                "data": {
+                    "from": data.get("from"),
+                    "to": data.get("to"),
+                    "message": data.get("message")
+                }
+            }
+        else:
+            # Các action khác giữ nguyên
+            request = {
+                "action": action,
+                "data": data
+            }
+        return await self.send_json(request)
     def __init__(self, server_host='127.0.0.1', server_port=9000):
         self._io_lock = asyncio.Lock()
         self.server_host = server_host
