@@ -78,15 +78,18 @@ class GroupChatWindow(QDialog):
         self.group_info_label.setText(f"Nhóm: {group_data['group_name']} (ID: {group_data['group_id']})")
 
     def display_messages(self, messages, offset, username):
+        print(f"[DEBUG][GroupChatWindow] display_messages called. offset={offset}, username={username}, messages={messages}")
         if offset == 0:
             self.messages_area.clear()
-        for msg in messages:
-            sender = msg['sender_name']
+        for i, msg in enumerate(messages):
+            sender = msg.get('sender_name', 'Unknown')
             time_str = msg.get("time_send", "Unknown")
+            content = msg.get('content', '')
+            print(f"[DEBUG][GroupChatWindow] Tin nhắn #{i}: sender={sender}, time={time_str}, content={content}")
             if sender == username:
-                self.messages_area.append(f"[Tôi - {time_str}]: {msg['content']}")
+                self.messages_area.append(f"[Tôi - {time_str}]: {content}")
             else:
-                self.messages_area.append(f"[{sender} - {time_str}]: {msg['content']}")
+                self.messages_area.append(f"[{sender} - {time_str}]: {content}")
 
     def send_message(self):
         """Gửi tin nhắn async"""
