@@ -25,6 +25,19 @@ class MessageBubble(QtWidgets.QWidget):
         bubble.setWordWrap(True)
         bubble.setMaximumWidth(400)
         bubble.setMinimumHeight(45)
+
+        # Timestamp label
+        timestamp_label = QtWidgets.QLabel()
+        timestamp_label.setText(self.get_timestamp_str())
+        timestamp_label.setStyleSheet("""
+            QLabel {
+                color: #888;
+                font-size: 12px;
+                padding-left: 6px;
+                padding-right: 6px;
+            }
+        """)
+        timestamp_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         if self.is_sent:
             # Sent messages (right, blue gradient)
@@ -39,9 +52,15 @@ class MessageBubble(QtWidgets.QWidget):
                     font-weight: 400;
                 }
             """)
+            # Bubble and timestamp in vertical layout
+            bubble_layout = QtWidgets.QVBoxLayout()
+            bubble_layout.setSpacing(2)
+            bubble_layout.addWidget(bubble)
+            bubble_layout.addWidget(timestamp_label)
+            bubble_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
             layout.addStretch()
-            layout.addWidget(bubble)
-            
+            layout.addLayout(bubble_layout)
+        
         else:
             # Received messages (left, gray) with avatar
             avatar = self._create_avatar()
@@ -57,10 +76,15 @@ class MessageBubble(QtWidgets.QWidget):
                     border: 1px solid #E4E6EA;
                 }
             """)
-            
+            # Bubble and timestamp in vertical layout
+            bubble_layout = QtWidgets.QVBoxLayout()
+            bubble_layout.setSpacing(2)
+            bubble_layout.addWidget(bubble)
+            bubble_layout.addWidget(timestamp_label)
+            bubble_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
             layout.addWidget(avatar)
             layout.addSpacing(8)
-            layout.addWidget(bubble)
+            layout.addLayout(bubble_layout)
             layout.addStretch()
     
     def _create_avatar(self):

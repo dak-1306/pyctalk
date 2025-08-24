@@ -1,9 +1,12 @@
 from datetime import datetime
-from PyQt6.QtWidgets import QMessageBox, QInputDialog
+from PyQt6.QtWidgets import QMessageBox, QInputDialog, QListWidgetItem
+from PyQt6 import QtCore
 import re
+import asyncio
+
 
 class GroupChatLogic:
-    """Async logic cho GroupChatWindow (tách khỏi UI)"""
+    """Async logic cho GroupChatWindow (toàn bộ xử lý đã gom về đây)"""
 
     def __init__(self, ui, api_client, user_id, username):
         self.ui = ui
@@ -13,31 +16,40 @@ class GroupChatLogic:
         self.current_group = None
         self.message_offset = 0
 
+        # Kết nối tín hiệu từ UI
+        self.ui.group_selected.connect(self.handle_group_selected)
+        self.ui.message_send_requested.connect(self.send_message)
+
+    # ---------------------------
+    # Load danh sách nhóm
+    # ---------------------------
     async def load_user_groups(self):
-            print("[DEBUG] Bắt đầu load_user_groups")
-            response = await self.api_client.get_user_groups(self.user_id)
-            print(f"[DEBUG] Response từ server: {response}")
-            if not response:
-                print("[ERROR] Không nhận được phản hồi từ server!")
-                QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
-                return
-            if response.get("success"):
-                print("[DEBUG] Response thành công, bắt đầu clear groups_list")
-                self.ui.groups_list.clear()
-                print(f"[DEBUG] Type của self.ui.groups_list: {type(self.ui.groups_list)}")
-                for idx, group in enumerate(response.get("groups", [])):
-                    print(f"[DEBUG] Group #{idx}: {group}")
-                    try:
-                        item_text = f"{group['group_name']} (ID: {group['group_id']})"
-                        item = self.ui._make_group_item(item_text, group)
-                        print(f"[DEBUG] Thêm item vào groups_list: {item_text}")
-                        self.ui.groups_list.addItem(item)
-                        print(f"[DEBUG] Số lượng item hiện tại: {self.ui.groups_list.count()}")
-                    except Exception as e:
-                        print(f"[ERROR] Lỗi khi tạo item cho group #{idx}: {e}")
-            else:
-                print(f"[ERROR] Không thể tải danh sách nhóm: {response.get('message', 'Unknown')}")
-                QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải danh sách nhóm"))
+        print("[GroupChatLogic] Đang tải danh sách nhóm...")
+        response = await self.api_client.get_user_groups(self.user_id)
+        if not response:
+            QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
+            return
+        if response.get("success"):
+            self.ui.groups_list.clear()
+            for idx, group in enumerate(response.get("groups", [])):
+                try:
+                    item_text = f"{group['group_name']} (ID: {group['group_id']})"
+                    item = QListWidgetItem(item_text)
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
+                    self.ui.groups_list.addItem(item)
+                except Exception as e:
+                    print(f"[GroupChatLogic][ERROR] Lỗi khi tạo item cho group #{idx}: {e}")
+        else:
+            QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải danh sách nhóm"))
+
+    # ---------------------------
+    # Chọn nhóm
+    # ---------------------------
+    async def handle_group_selected(self, item):
+        """Xử lý khi UI chọn 1 nhóm"""
+        group_data = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        print(f"[GroupChatLogic] Chuyển sang nhóm: {group_data.get('group_name')} (ID: {group_data.get('group_id')})")
+        await self.select_group(group_data)
 
     async def select_group(self, group_data):
         self.current_group = group_data
@@ -45,25 +57,60 @@ class GroupChatLogic:
         self.ui.update_group_info(group_data)
         await self.load_group_messages()
 
+    # ---------------------------
+    # Tải tin nhắn nhóm
+    # ---------------------------
     async def load_group_messages(self, offset=0, limit=50):
         if not self.current_group:
-            print("[DEBUG][GroupChatLogic] current_group is None khi load_group_messages")
+            print("[GroupChatLogic] current_group is None, abort load_group_messages")
             return
-        print(f"[DEBUG][GroupChatLogic] Gọi get_group_messages với group_id={self.current_group['group_id']}, user_id={self.user_id}")
         response = await self.api_client.get_group_messages(
             self.current_group["group_id"], self.user_id, limit, offset
         )
-        print(f"[DEBUG][GroupChatLogic] Response tin nhắn nhóm: {response}")
         if not response:
             QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
             return
         if response.get("success"):
-            print(f"[DEBUG][GroupChatLogic] Tin nhắn nhận được: {response.get('messages', [])}")
-            self.ui.display_messages(response.get("messages", []), offset, self.username)
+            messages = response.get("messages", [])
+            self.display_messages(messages, offset, self.username)
         else:
-            print(f"[DEBUG][GroupChatLogic] Không thể tải tin nhắn: {response.get('message', 'Unknown')}")
+            print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
             QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))
 
+    # ---------------------------
+    # Hiển thị tin nhắn
+    # ---------------------------
+    def display_messages(self, messages, offset, username):
+        if offset == 0:
+            self.ui.clear_messages()
+        for msg in messages:
+            sender = msg.get('sender_name', 'Unknown')
+            time_str = msg.get("time_send", "Unknown")
+            content = msg.get('content', '')
+            is_sent = sender == username
+            self.ui.add_message(content, is_sent, time_str)
+
+    # ---------------------------
+    # Gửi tin nhắn
+    # ---------------------------
+    async def send_message(self, content: str):
+        if not self.current_group:
+            QMessageBox.warning(self.ui, "Lỗi", "Vui lòng chọn nhóm trước")
+            return
+        if not content.strip():
+            return
+
+        response = await self.api_client.send_group_message(
+            self.user_id, self.current_group["group_id"], content.strip()
+        )
+        if response and response.get("success"):
+            await self.load_group_messages(offset=0)
+        else:
+            QMessageBox.warning(self.ui, "Lỗi", "Không thể gửi tin nhắn")
+
+    # ---------------------------
+    # Quản lý nhóm
+    # ---------------------------
     async def create_new_group(self):
         group_name, ok = QInputDialog.getText(self.ui, "Tạo nhóm mới", "Tên nhóm:")
         if not ok or not group_name.strip():
@@ -83,14 +130,17 @@ class GroupChatLogic:
         if not friends:
             QMessageBox.warning(self.ui, "Lỗi", "Không có bạn bè để thêm")
             return
+
         friend_names = [f"{f['username']} (ID: {f['user_id']})" for f in friends]
         selected, ok = QInputDialog.getItem(self.ui, "Thêm thành viên", "Chọn bạn để thêm:", friend_names, 0, False)
         if not ok or not selected:
             return
+
         match = re.search(r'ID: (\d+)', selected)
         if not match:
             return
         add_user_id = int(match.group(1))
+
         response = await self.api_client.add_member_to_group(
             self.current_group["group_id"], add_user_id, self.user_id
         )

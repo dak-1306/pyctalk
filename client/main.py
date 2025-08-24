@@ -1,9 +1,13 @@
 import sys
 import os
+import logging
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PyQt6.QtCore import QLoggingCategory
 from client.Login.login_signIn import LoginWindow
+
+# Cấu hình logging để log debug hiện ra console
+logging.basicConfig(level=logging.DEBUG)
 
 # Suppress Qt font warnings
 os.environ['QT_LOGGING_RULES'] = 'qt.qpa.fonts.warning=false'

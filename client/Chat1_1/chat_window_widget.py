@@ -4,6 +4,16 @@ from PyQt6.QtGui import QCursor
 from ..UI.messenger_ui.message_bubble_widget import MessageBubble
 
 class ChatWindow(QtWidgets.QWidget):
+    def showEvent(self, event):
+        """Reload lịch sử chat khi widget được hiển thị lại (quay lại bạn bè)"""
+        super().showEvent(event)
+        try:
+            if getattr(self.logic, "current_friend_id", None):
+                import asyncio
+                asyncio.create_task(self.logic.get_chat_history(self.logic.user_id, self.logic.current_friend_id))
+        except Exception as e:
+            import logging
+            logging.exception("Failed to reload chat history on showEvent: %s", e)
     """Individual chat window UI only"""
     back_clicked = pyqtSignal()
     message_send_requested = pyqtSignal(str)   # UI phát tín hiệu khi muốn gửi tin nhắn

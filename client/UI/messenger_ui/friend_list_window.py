@@ -11,16 +11,17 @@ class FriendListWindow(QtWidgets.QWidget):
         super().__init__(parent)
         self.username = username
         self.current_user_id = user_id
-        print(f"[DEBUG][FriendListWindow] __init__ username={username}, user_id={user_id}, client={client}")
-        # Nếu client chưa truyền vào, thử lấy từ parent (nếu có)
+        # Lấy client
         if client is not None:
             self.client = client
         elif parent and hasattr(parent, 'client'):
             self.client = parent.client
         else:
             self.client = None
-        print(f"[DEBUG][FriendListWindow] self.client={self.client}")
         self._setup_ui()
+        # Khởi tạo logic tách biệt
+        from Add_friend.friend_list_logic import FriendListLogic
+        self.logic = FriendListLogic(self.client, self.username, self.current_user_id)
         import asyncio
         asyncio.create_task(self._load_conversations())
         
@@ -122,45 +123,16 @@ class FriendListWindow(QtWidgets.QWidget):
         main_layout.addWidget(scroll_area)
     
     async def _load_conversations(self):
-        """Lấy danh sách bạn bè từ server qua FriendClient (callback, không khởi động lại listen_loop)"""
+        """Lấy danh sách bạn bè từ logic, chỉ nhận list dict đã xử lý"""
         print(f"[DEBUG][FriendListWindow] _load_conversations called, self.client={self.client}")
         if self.client is None:
             print("[ERROR][FriendListWindow] Không tìm thấy client để lấy danh sách bạn bè. Hãy truyền client khi khởi tạo FriendListWindow.")
             self._display_conversations([])
             return
         try:
-            from Add_friend.friend import FriendClient
-            friend_client = FriendClient(self.client)
-            print(f"[DEBUG][FriendListWindow] friend_client.get_friends type: {type(friend_client.get_friends)} value: {friend_client.get_friends}")
-
-            async def friends_callback(response):
-                print(f"[DEBUG][FriendListWindow] get_friends response type: {type(response)} value: {response}")
-                friends = response.get("data", []) if response and isinstance(response, dict) and response.get("success") else []
-                print(f"[DEBUG][FriendListWindow] friends={friends}")
-                conversations = []
-                for friend in friends:
-                    # Nếu server trả về dict với id và name
-                    if isinstance(friend, dict):
-                        friend_id = friend.get('id') or friend.get('friend_id')
-                        friend_display_name = friend.get('name') or friend.get('friend_name') or str(friend_id)
-                    else:
-                        print(f"[WARNING][FriendListWindow] Friend không có id, bỏ qua: {friend}")
-                        continue
-                    if not friend_id:
-                        print(f"[WARNING][FriendListWindow] Friend không có id hợp lệ, bỏ qua: {friend}")
-                        continue
-                    print(f"[DEBUG][FriendListWindow] Thêm bạn: id={friend_id}, name={friend_display_name}")
-                    conversations.append({
-                        'friend_id': friend_id,
-                        'friend_name': friend_display_name,
-                        'last_message': '',
-                        'last_message_time': '',
-                        'unread_count': 0
-                    })
-                print(f"[DEBUG][FriendListWindow] conversations={conversations}")
-                self._display_conversations(conversations)
-
-            await friend_client.get_friends(friends_callback)
+            conversations = await self.logic.get_conversations()
+            print(f"[DEBUG][FriendListWindow] conversations={conversations}")
+            self._display_conversations(conversations)
         except Exception as e:
             print(f"[ERROR][FriendListWindow] Error loading friends: {e}")
             self._display_conversations([])

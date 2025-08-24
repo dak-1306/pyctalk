@@ -20,12 +20,13 @@ class AsyncPycTalkClient:
                 }
             }
         elif action == "send_message":
+            # Chat 1-1: gửi from/to cho server
             request = {
                 "action": "send_message",
                 "data": {
-                    "from": data.get("from"),
-                    "to": data.get("to"),
-                    "message": data.get("message")
+                    "from": str(data.get("from") or data.get("user_id")),
+                    "to": str(data.get("to") or data.get("friend_id")),
+                    "message": str(data.get("message"))
                 }
             }
         else:

@@ -68,48 +68,12 @@ class SidebarWidget(QtWidgets.QFrame):
         group_search.setPlaceholderText("🔍 Tìm nhóm...")
         layout.addWidget(group_search)
 
-        self.groups_list = QtWidgets.QListWidget()
-        layout.addWidget(self.groups_list)
-
-        # Load nhóm async
-        async def load_groups():
-            print(f"[DEBUG][Sidebar] Bắt đầu load_groups với user_id={self.user_id}")
-            try:
-                from Group_chat.group_api_client import GroupAPIClient
-                api_client = GroupAPIClient(self.client)
-
-                if self.user_id is None:
-                    self.groups_list.addItem("Không tìm thấy user_id")
-                    print("[ERROR][Sidebar] user_id is None")
-                    return
-
-                response = await api_client.get_user_groups(int(self.user_id))
-                print(f"[DEBUG][Sidebar] Response từ server: {response}")
-                if response and response.get("success"):
-                    self.groups_list.clear()
-                    for idx, group in enumerate(response.get("groups", [])):
-                        group_name = group["group_name"]
-                        member_count = (
-                            f"{group.get('member_count', 'N/A')} thành viên"
-                            if "member_count" in group else ""
-                        )
-                        item_text = f"{group_name}\n{member_count}"
-                        print(f"[DEBUG][Sidebar] Thêm group #{idx}: {item_text}")
-                        item = QtWidgets.QListWidgetItem(item_text)
-                        item.setSizeHint(QtCore.QSize(0, 50))
-                        item.setData(QtCore.Qt.ItemDataRole.UserRole, group)
-                        self.groups_list.addItem(item)
-                    print(f"[DEBUG][Sidebar] Số lượng nhóm: {self.groups_list.count()}")
-                else:
-                    self.groups_list.addItem("Không thể tải danh sách nhóm")
-                    print(f"[ERROR][Sidebar] Không thể tải danh sách nhóm: {response}")
-            except Exception as e:
-                self.groups_list.addItem(f"Lỗi tải nhóm: {e}")
-                print(f"[ERROR][Sidebar] Lỗi tải nhóm: {e}")
-
-        import asyncio
-        loop = asyncio.get_running_loop()
-        loop.create_task(load_groups())
+        # Thay thế QListWidget bằng GroupListWindow
+        from client.UI.messenger_ui.group_list_window import GroupListWindow
+        self.groups_widget = GroupListWindow(user_id=self.user_id, client=self.client)
+        layout.addWidget(self.groups_widget)
+        # Đảm bảo tương thích với code cũ
+        self.groups_list = self.groups_widget
 
         # Action buttons trong tab nhóm
         group_actions = QtWidgets.QHBoxLayout()

@@ -26,7 +26,7 @@ class Chat1v1Logic:
                     messages = resp['data']['messages']
             self.ui.clear_messages()
             for m in messages:
-                sender_id = int(m.get("from"))
+                sender_id = int(m.get("user_id") or m.get("from"))
                 content = m.get("message", "")
                 timestamp = m.get("timestamp", None)
                 print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}")
@@ -36,9 +36,9 @@ class Chat1v1Logic:
 
     async def send_message(self, text):
         try:
+            # Đảm bảo gọi đúng hàm API client với trường user_id, friend_id, message
             resp = await self.api.send_message(self.current_user_id, self.friend_id, text)
             if resp and resp.get("success"):
-                # Nếu server trả về timestamp thì lấy, không thì None
                 timestamp = None
                 if 'data' in resp and 'timestamp' in resp['data']:
                     timestamp = resp['data']['timestamp']
@@ -48,7 +48,7 @@ class Chat1v1Logic:
 
     def on_receive_message(self, data):
         """callback khi server push tin nhắn"""
-        sender = int(data.get("from"))
+        sender = int(data.get("user_id") or data.get("from"))
         message = data.get("message", "")
         timestamp = data.get("timestamp", None)
         if sender == self.friend_id:

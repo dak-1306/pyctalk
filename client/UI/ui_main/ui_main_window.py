@@ -16,7 +16,6 @@ from .settings_manager import SettingsManager
 from .notification_manager import NotificationManager
 from .animation_helper import AnimationHelper
 # Group chat
-from client.Group_chat.group_chat_window import GroupChatWindow
 logger = logging.getLogger(__name__)
 # Ensure root path for database imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -33,7 +32,7 @@ class Ui_MainWindow(QtCore.QObject):
         self.client = client
         self.main_window = main_window
         self.user_id = self._get_user_id_from_client(client)
-        self.group_chat_window: Optional[GroupChatWindow] = None
+        # self.group_chat_window đã bị loại bỏ
         self.settings = SettingsManager()
         self.notification_manager = NotificationManager(main_window)
         self.status_thread: Optional[StatusUpdateThread] = None
@@ -103,6 +102,7 @@ class Ui_MainWindow(QtCore.QObject):
         """Open 1-1 chat window when a friend is selected"""
         from client.Chat1_1.chat_window_widget import ChatWindow
         from client.Chat1_1.chat1v1_client import Chat1v1Client
+        from client.Chat1_1.chat1v1_logic import Chat1v1Logic
         # Remove all widgets except topbar
         for i in reversed(range(self.main_layout.count())):
             item = self.main_layout.itemAt(i)
@@ -117,12 +117,18 @@ class Ui_MainWindow(QtCore.QObject):
         except Exception:
             pass
         chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
-        # Initialize Chat1v1Client to connect logic and load message history
-        self.chat1v1_client = Chat1v1Client(
+        # Khởi tạo api_client và logic, gán logic cho chat_window
+        api_client = Chat1v1Client(
             chat_window,
             pyctalk_client=self.client,
             current_user_id=chat_data['current_user_id'],
             friend_id=chat_data.get('friend_id', 1)
+        )
+        chat_window.logic = Chat1v1Logic(
+            chat_window,
+            api_client,
+            chat_data['current_user_id'],
+            chat_data.get('friend_id', 1)
         )
         self.main_layout.addWidget(chat_window)
         chat_window.show()
@@ -304,7 +310,8 @@ class Ui_MainWindow(QtCore.QObject):
         self.main_window.closeEvent = self.closeEvent
         
         # Groups list double-click
-        self.groups_list.itemDoubleClicked.connect(self.on_group_double_clicked)
+        if hasattr(self.groups_list, 'group_selected'):
+            self.groups_list.group_selected.connect(self.on_group_double_clicked)
     
     def _apply_theme(self):
         """Apply current theme to the interface"""
@@ -426,7 +433,7 @@ class Ui_MainWindow(QtCore.QObject):
             else:
                 self._update_connection_status(False)
         except Exception as e:
-            logger.error(f"Connection status check failed: {e}")
+            logger.error(f"[Ui_MainWindow] Lỗi kiểm tra kết nối: {e}")
             self._update_connection_status(False)
     
     def _update_connection_status(self, is_connected: bool):
@@ -659,12 +666,10 @@ class Ui_MainWindow(QtCore.QObject):
                     "Demo logout - chưa kết nối client thực tế."
                 )
                 return
-            
             self.logout_handler = LogoutHandler(self.client, self.main_window)
             self.logout_handler.logout(self.username)
-            
         except Exception as e:
-            logger.error(f"Logout error: {e}")
+            logger.error(f"[Ui_MainWindow] Lỗi đăng xuất: {e}")
             QtWidgets.QMessageBox.critical(
                 self.main_window,
                 "Lỗi đăng xuất",
@@ -672,28 +677,17 @@ class Ui_MainWindow(QtCore.QObject):
             )
     
     def on_group_chat_clicked(self):
-        """Handle group chat button click: mở cửa sổ GroupChatWindow"""
-        try:
-            # Truyền đúng tham số cho GroupChatWindow
-            user_id = getattr(self.client, 'get_user_id', lambda: None)()
-            username = getattr(self.client, 'get_username', lambda: self.username)()
-            self.group_chat_window = GroupChatWindow(self.client, user_id, username)
-            self.group_chat_window.show()
-            self.group_chat_window.raise_()
-            self.group_chat_window.activateWindow()
-            # Có thể thêm animation nếu muốn
-        except Exception as e:
-            logger.error(f"Không thể mở GroupChatWindow: {e}")
-            QtWidgets.QMessageBox.critical(
-                self.main_window,
-                "Lỗi",
-                f"Không thể mở cửa sổ chat nhóm: {str(e)}"
-            )
+        """Handle group chat button click: đã loại bỏ GroupChatWindow"""
+        QtWidgets.QMessageBox.information(
+            self.main_window,
+            "Thông báo",
+            "Chức năng chat nhóm đã được loại bỏ."
+        )
     
-    def on_group_double_clicked(self, item):
+    def on_group_double_clicked(self, group_data):
         """Khi click vào nhóm, chỉ còn khung chat nhóm, khung welcome phải biến mất hoàn toàn"""
-        group_data = item.data(QtCore.Qt.ItemDataRole.UserRole)
-        # Chỉ giữ lại topbar, xóa toàn bộ các widget khác trong main_layout
+        # Chỉ log khi chuyển nhóm
+        logger.info(f"[Ui_MainWindow] Chuyển sang nhóm: {group_data.get('group_name')} (ID: {group_data.get('group_id')})")
         widgets_to_remove = []
         for i in range(self.main_layout.count()):
             widget = self.main_layout.itemAt(i).widget()
@@ -709,6 +703,10 @@ class Ui_MainWindow(QtCore.QObject):
         # Thêm khung chat nhóm mới
         chat_widget = EmbeddedGroupChatWidget(self.client, self.user_id, self.username, group_data)
         self.main_layout.addWidget(chat_widget, 1)
+        # Luôn reload lại tin nhắn khi chuyển nhóm
+        if hasattr(chat_widget, 'logic'):
+            import asyncio
+            asyncio.create_task(chat_widget.logic.load_group_messages(offset=0))
     
     def closeEvent(self, event):
         """Handle window close event"""
@@ -729,19 +727,11 @@ class Ui_MainWindow(QtCore.QObject):
             # Stop status monitoring thread
             if self.status_thread:
                 self.status_thread.stop()
-            
             # Stop timers
             self.connection_timer.stop()
-            
-            # Close group chat window
-            if self.group_chat_window:
-                self.group_chat_window.close()
-            
             # Hide tray icon
             if self.notification_manager.tray_icon:
                 self.notification_manager.tray_icon.hide()
-                
-            logger.info("Resources cleaned up successfully")
-            
+            logger.info("[Ui_MainWindow] Đã cleanup tài nguyên thành công")
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error(f"[Ui_MainWindow] Lỗi khi cleanup: {e}")
