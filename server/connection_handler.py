@@ -1,6 +1,6 @@
 # server/connection_handler_async.py
 import asyncio
-from server.client_session import ClientSession
+from client_session import ClientSession
 
 
 class ConnectionHandlerAsync:

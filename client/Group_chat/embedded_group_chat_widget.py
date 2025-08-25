@@ -152,18 +152,23 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
 
     # ---------------------------
     # Helper UI nội bộ
-    # ---------------------------
-    def _add_message_bubble(self, message, is_sent, timestamp=None):
+    # ---------------------------    def _add_message_bubble(self, message, is_sent, timestamp=None):
         bubble = MessageBubble(message, is_sent=is_sent, timestamp=timestamp)
         # Chèn trước stretch ở cuối
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, bubble)
 
     def _clear_message_bubbles(self):
-        while self.messages_layout.count() > 1:
-            item = self.messages_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+        try:
+            if self.messages_layout and not self.messages_layout.isEmpty():
+                while self.messages_layout.count() > 1:
+                    item = self.messages_layout.takeAt(0)
+                    if item:
+                        w = item.widget()
+                        if w:
+                            w.deleteLater()
+        except RuntimeError as e:
+            # Layout đã bị delete, ignore error
+            pass
 
     def _scroll_to_bottom(self):
         bar = self.scroll_area.verticalScrollBar()

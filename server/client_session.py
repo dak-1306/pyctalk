@@ -1,9 +1,9 @@
 import json
 import asyncio
 import time
-from server.Login_server.RegisterHandle import register
-from server.Login_server.LoginHandle import login
-from server.HandleGroupChat.group_handler import GroupHandler
+from Login_server.RegisterHandle import register
+from Login_server.LoginHandle import login
+from HandleGroupChat.group_handler import GroupHandler
 
 
 class ClientSession:
@@ -13,11 +13,9 @@ class ClientSession:
         self.client_address = client_address
         self.running = True
         self.group_handler = GroupHandler()
-        self.last_ping_time = time.time()
-
-        # Friend handler
+        self.last_ping_time = time.time()        # Friend handler
         try:
-            from server.Handle_AddFriend.friend_handle import friend_handler
+            from Handle_AddFriend.friend_handle import friend_handler
             self.friend_handler = friend_handler
         except Exception as e:
             print(f"Không thể import friend_handler: {e}")
@@ -25,7 +23,7 @@ class ClientSession:
 
         # Chat 1-1 handler
         try:
-            from server.HandleChat1_1.chat_handler import chat_handler
+            from HandleChat1_1.chat_handler import chat_handler
             self.chat1v1_handler = chat_handler
         except Exception as e:
             print(f"Không thể import chat_handler: {e}")

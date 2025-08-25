@@ -75,20 +75,31 @@ class GroupChatLogic:
             self.display_messages(messages, offset, self.username)
         else:
             print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
-            QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))
-
-    # ---------------------------
+            QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))    # ---------------------------
     # Hiển thị tin nhắn
     # ---------------------------
     def display_messages(self, messages, offset, username):
-        if offset == 0:
-            self.ui.clear_messages()
-        for msg in messages:
-            sender = msg.get('sender_name', 'Unknown')
-            time_str = msg.get("time_send", "Unknown")
-            content = msg.get('content', '')
-            is_sent = sender == username
-            self.ui.add_message(content, is_sent, time_str)
+        try:
+            if offset == 0:
+                self.ui.clear_messages()
+            for msg in messages:
+                sender = msg.get('sender_name', 'Unknown')
+                time_str = msg.get("time_send", "Unknown")
+                content = msg.get('content', '')
+                is_sent = sender == username
+                self.ui.add_message(content, is_sent, time_str)
+        except (RuntimeError, AttributeError) as e:
+            # Handle UI widget deletion or attribute errors
+            print(f"Warning: UI display error in display_messages: {e}")
+            # Try alternative display method
+            if hasattr(self.ui, 'messages'):
+                self.ui.messages.extend([
+                    {
+                        'content': msg.get('content', ''),
+                        'is_sent': msg.get('sender_name', '') == username,
+                        'timestamp': msg.get('time_send', '')
+                    } for msg in messages
+                ])
 
     # ---------------------------
     # Gửi tin nhắn

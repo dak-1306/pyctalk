@@ -3,7 +3,7 @@ class Chat1v1Logic:
     """Logic xử lý tin nhắn, kết nối API với UI"""
     def __init__(self, ui_window, api_client, current_user_id, friend_id):
         self.ui = ui_window
-        self.api = api_client
+        self.api_client = api_client
         self.current_user_id = current_user_id
         self.friend_id = friend_id
 
@@ -15,7 +15,7 @@ class Chat1v1Logic:
     async def load_message_history(self):
         try:
             print(f"[DEBUG][Chat1v1Logic] Gọi get_chat_history với user_id={self.current_user_id}, friend_id={self.friend_id}")
-            resp = await self.api.get_chat_history(self.current_user_id, self.friend_id)
+            resp = await self.api_client.get_chat_history(self.current_user_id, self.friend_id)
             print(f"[DEBUG][Chat1v1Logic] Response lịch sử: {resp}")
             # Phản hồi server có thể là resp['data']['messages']
             messages = []
@@ -37,7 +37,7 @@ class Chat1v1Logic:
     async def send_message(self, text):
         try:
             # Đảm bảo gọi đúng hàm API client với trường user_id, friend_id, message
-            resp = await self.api.send_message(self.current_user_id, self.friend_id, text)
+            resp = await self.api_client.send_message(self.current_user_id, self.friend_id, text)
             if resp and resp.get("success"):
                 timestamp = None
                 if 'data' in resp and 'timestamp' in resp['data']:

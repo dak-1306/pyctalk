@@ -1,7 +1,10 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor
-from ..UI.messenger_ui.message_bubble_widget import MessageBubble
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from UI.messenger_ui.message_bubble_widget import MessageBubble
 
 class ChatWindow(QtWidgets.QWidget):
     def showEvent(self, event):
