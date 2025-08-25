@@ -98,26 +98,35 @@ class GroupListWindow(QtWidgets.QWidget):
 
     async def _load_groups(self):
         """Lấy danh sách nhóm từ server qua GroupAPIClient"""
+        print(f"[DEBUG][GroupListWindow] _load_groups called, client={self.client}, user_id={self.user_id}")
         if self.client is None or self.user_id is None:
+            print(f"[DEBUG][GroupListWindow] Client hoặc user_id là None, hiển thị danh sách trống")
             self._display_groups([])
             return
         try:
             from Group_chat.group_api_client import GroupAPIClient
             api_client = GroupAPIClient(self.client)
+            print(f"[DEBUG][GroupListWindow] Gọi get_user_groups với user_id={self.user_id}")
             response = await api_client.get_user_groups(int(self.user_id))
+            print(f"[DEBUG][GroupListWindow] Response từ server: {response}")
             groups = response.get("groups", []) if response and response.get("success") else []
+            print(f"[DEBUG][GroupListWindow] Danh sách groups: {groups}")
             # Truyền nguyên group dict vào UI
             self._display_groups(groups)
         except Exception as e:
             print(f"[ERROR][GroupListWindow] Error loading groups: {e}")
+            import traceback
+            traceback.print_exc()
             self._display_groups([])
 
     def _display_groups(self, groups):
+        print(f"[DEBUG][GroupListWindow] _display_groups được gọi với {len(groups)} groups")
         while self.groups_layout.count() > 1:
             child = self.groups_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
         for group in groups:
+            print(f"[DEBUG][GroupListWindow] Thêm group: {group}")
             chat_item = ChatListItem({
                 'friend_id': group.get('group_id'),
                 'friend_name': group.get('group_name', str(group.get('group_id'))),

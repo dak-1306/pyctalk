@@ -64,9 +64,6 @@ class SidebarWidget(QtWidgets.QFrame):
         groups_tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(groups_tab)
 
-        group_search = QtWidgets.QLineEdit()
-        group_search.setPlaceholderText("🔍 Tìm nhóm...")
-        layout.addWidget(group_search)
 
         # Thay thế QListWidget bằng GroupListWindow
         from client.UI.messenger_ui.group_list_window import GroupListWindow
@@ -100,10 +97,6 @@ class SidebarWidget(QtWidgets.QFrame):
 
         # Tích hợp logic gửi kết bạn
         self.btnAddFriend.clicked.connect(self._show_add_friend_dialog)
-
-        self.btnGroupChat = QtWidgets.QPushButton("🚀 Tạo Group Chat")
-        self.btnGroupChat.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnGroupChat)
 
         self.btnSettings = QtWidgets.QPushButton("⚙️ Cài đặt")
         self.btnSettings.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))

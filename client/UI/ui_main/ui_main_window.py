@@ -99,7 +99,7 @@ class Ui_MainWindow(QtCore.QObject):
         # Expose sidebar attributes for compatibility
         self.tabWidget = self.sidebar.tabWidget
         self.groups_list = self.sidebar.groups_list
-        self.btnGroupChat = self.sidebar.btnGroupChat
+    # self.btnGroupChat đã bị loại bỏ
         self.btnSettings = self.sidebar.btnSettings
         self.outer_layout.addWidget(self.sidebar)
     def _open_chat_window_1v1(self, chat_data):
@@ -336,7 +336,7 @@ class Ui_MainWindow(QtCore.QObject):
         """Connect all signals and slots"""
         # Button clicks
         self.btnLogout.clicked.connect(self.on_logout_clicked)
-        self.btnGroupChat.clicked.connect(self.on_group_chat_clicked)
+    # self.btnGroupChat đã bị loại bỏ
         self.btnSettings.clicked.connect(self.show_settings)
         self.btnThemeToggle.clicked.connect(self.toggle_theme)
         
@@ -475,7 +475,7 @@ class Ui_MainWindow(QtCore.QObject):
         self.is_connected = is_connected
         self.status_indicator.setText("🟢 Đã kết nối" if is_connected else "🔴 Mất kết nối")
         self.status_connection.setText("Kết nối ổn định" if is_connected else "Đang kết nối lại...")
-        self.btnGroupChat.setEnabled(is_connected)
+    # self.btnGroupChat đã bị loại bỏ
         # Chỉ cập nhật status_message nếu nó còn tồn tại và chưa bị xóa
         if hasattr(self, "status_message") and self.status_message is not None:
             try:
