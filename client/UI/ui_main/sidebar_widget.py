@@ -120,14 +120,18 @@ class SidebarWidget(QtWidgets.QFrame):
             return
 
         friend_client = FriendClient(self.client)
-        response = friend_client.send_friend_request(username)
-        if response and response.get("success"):
-            QtWidgets.QMessageBox.information(
-                self, "Thành công", f"Đã gửi yêu cầu kết bạn tới {username}!"
-            )
-        else:
-            error_msg = (
-                response.get("error", "Gửi yêu cầu thất bại.")
-                if response else "Không nhận được phản hồi từ server."
-            )
-            QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
+
+        def on_friend_request_response(response):
+            if response and response.get("success"):
+                QtWidgets.QMessageBox.information(
+                    self, "Thành công", f"Đã gửi yêu cầu kết bạn tới {username}!"
+                )
+            else:
+                error_msg = (
+                    response.get("error", "Gửi yêu cầu thất bại.")
+                    if response else "Không nhận được phản hồi từ server."
+                )
+                QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
+
+        import asyncio
+        asyncio.create_task(friend_client.send_friend_request(username, on_friend_request_response))

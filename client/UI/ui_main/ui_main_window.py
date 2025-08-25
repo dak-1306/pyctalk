@@ -41,6 +41,10 @@ class Ui_MainWindow(QtCore.QObject):
         self.connection_timer = QTimer()
         self.connection_timer.timeout.connect(self._check_connection_status)
         self.current_theme = self.settings.get("theme", "light")
+        # Cache cho chat windows để tránh mất tin nhắn
+        self.chat_windows_cache = {}  # {friend_id: (chat_window, api_client)}
+        self.current_chat_friend_id = None
+        self.card_container = None  # Lưu reference để ẩn/hiện
 
     def _get_user_id_from_client(self, client):
         if hasattr(client, 'get_user_id'):
@@ -102,36 +106,66 @@ class Ui_MainWindow(QtCore.QObject):
         """Open 1-1 chat window when a friend is selected"""
         from client.Chat1_1.chat_window_widget import ChatWindow
         from client.Chat1_1.chat1v1_client import Chat1v1Client
-        from client.Chat1_1.chat1v1_logic import Chat1v1Logic
-        # Remove all widgets except topbar
-        for i in reversed(range(self.main_layout.count())):
-            item = self.main_layout.itemAt(i)
-            widget = item.widget()
-            if widget and widget != self.topbar:
-                self.main_layout.removeWidget(widget)
-                widget.setParent(None)
+        
         # Ensure current_user_id is set
         chat_data['current_user_id'] = chat_data.get('current_user_id', self.user_id)
         try:
             chat_data['current_user_id'] = int(chat_data['current_user_id'])
         except Exception:
             pass
-        chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
-        # Khởi tạo api_client và logic, gán logic cho chat_window
-        api_client = Chat1v1Client(
-            chat_window,
-            pyctalk_client=self.client,
-            current_user_id=chat_data['current_user_id'],
-            friend_id=chat_data.get('friend_id', 1)
-        )
-        chat_window.logic = Chat1v1Logic(
-            chat_window,
-            api_client,
-            chat_data['current_user_id'],
-            chat_data.get('friend_id', 1)
-        )
-        self.main_layout.addWidget(chat_window)
-        chat_window.show()
+            
+        friend_id = chat_data.get('friend_id', 1)
+        
+        # Ẩn card_container nếu đang hiển thị
+        if self.card_container and self.card_container.isVisible():
+            self.card_container.hide()
+        
+        # Ẩn chat window hiện tại (nếu có)
+        if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
+            current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
+            current_chat_window.hide()
+            self.main_layout.removeWidget(current_chat_window)
+        
+        # Kiểm tra cache, nếu đã có thì dùng lại
+        if friend_id in self.chat_windows_cache:
+            chat_window, api_client = self.chat_windows_cache[friend_id]
+            self.main_layout.addWidget(chat_window)
+            chat_window.show()
+        else:
+            # Tạo mới chat window và cache lại
+            chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
+            # Khởi tạo api_client và logic, gán logic cho chat_window
+            api_client = Chat1v1Client(
+                chat_window,
+                pyctalk_client=self.client,
+                current_user_id=chat_data['current_user_id'],
+                friend_id=friend_id
+            )
+            # Sử dụng logic đã được tạo trong Chat1v1Client
+            chat_window.logic = api_client.logic
+            
+            # Cache lại để dùng lại sau
+            self.chat_windows_cache[friend_id] = (chat_window, api_client)
+            
+            self.main_layout.addWidget(chat_window)
+            chat_window.show()
+            
+        self.current_chat_friend_id = friend_id
+
+    def _show_main_view(self):
+        """Hiển thị main view (card) và ẩn chat windows"""
+        # Ẩn chat window hiện tại
+        if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
+            current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
+            current_chat_window.hide()
+            self.main_layout.removeWidget(current_chat_window)
+        
+        # Hiển thị card_container
+        if self.card_container:
+            self.main_layout.addWidget(self.card_container, 1)
+            self.card_container.show()
+        
+        self.current_chat_friend_id = None
 
     def _setup_main_content(self):
         """Setup main content area"""
@@ -190,8 +224,8 @@ class Ui_MainWindow(QtCore.QObject):
     
     def _setup_main_card(self):
         """Setup main welcome card"""
-        card_container = QtWidgets.QWidget()
-        container_layout = QtWidgets.QVBoxLayout(card_container)
+        self.card_container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(self.card_container)
         container_layout.addStretch(1)
         self.card = MainCardWidget(self.username)
         self.title = self.card.title
@@ -203,7 +237,7 @@ class Ui_MainWindow(QtCore.QObject):
         card_wrapper.addStretch(1)
         container_layout.addLayout(card_wrapper)
         container_layout.addStretch(2)
-        self.main_layout.addWidget(card_container, 1)
+        self.main_layout.addWidget(self.card_container, 1)
     
     def _setup_welcome_content(self, layout):
         """Setup welcome content in main card"""

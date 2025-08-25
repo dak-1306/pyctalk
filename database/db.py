@@ -4,7 +4,7 @@ import aiomysql
 
 
 class AsyncMySQLDatabase:
-    def __init__(self, host="localhost", user="root", password="dang13062005", database="pyctalk"):
+    def __init__(self, host="localhost", user="root", password="", database="pyctalk"):
         self.host = host
         self.user = user
         self.password = password
