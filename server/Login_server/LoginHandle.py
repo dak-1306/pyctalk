@@ -12,13 +12,13 @@ class LoginHandler:
             return {"success": False, "message": "Tài khoản không tồn tại."}
 
         hashed_input = hash_password_sha256(password)
-        stored_hash = user["Password_hash"]
+        stored_hash = user["password_hash"]
         
         if hashed_input == stored_hash:
             return {
                 "success": True,
                 "message": "Đăng nhập thành công.",
-                "user_id": user["User_id"]
+                "user_id": user["id"]
             }
         else:
             return {"success": False, "message": "Sai mật khẩu."}

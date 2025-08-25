@@ -7,7 +7,7 @@ from PyQt6.QtCore import QLoggingCategory
 
 # Add parent directory to path so we can import client modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from client.Login.login_signIn import LoginWindow
+from Login.login_signIn import LoginWindow
 
 # Cấu hình logging để log debug hiện ra console
 logging.basicConfig(level=logging.DEBUG)

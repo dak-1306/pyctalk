@@ -1,3 +1,5 @@
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from database.db import db
 import hashlib
 
@@ -26,7 +28,7 @@ class RegisterHandler:
 
         try:
             await db.execute(
-                "INSERT INTO users (Username, Password_hash, Email) VALUES (%s, %s, %s)",
+                "INSERT INTO users (username, password_hash, email) VALUES (%s, %s, %s)",
                 (username, hashed_password, email)
             )
             return {"success": True, "message": "Đăng ký thành công."}
