@@ -108,6 +108,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
     # Các hàm UI để LOGIC gọi (giữ tên/signature cũ)
     # ---------------------------
     def display_messages(self, messages, offset, username):
+        print(f"[UI] Displaying {len(messages)} messages, username={username}")
+        for msg in messages:
+            print(f"[UI] Message: sender={msg.get('sender_name')}, content={msg.get('content')}, time={msg.get('time_send')}")
         if offset == 0:
             self._clear_message_bubbles()
         for msg in messages:

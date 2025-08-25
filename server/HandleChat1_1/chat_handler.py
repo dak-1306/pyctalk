@@ -56,9 +56,9 @@ class Chat1v1Handler:
             # Lưu vào database
             try:
                 from database.db import db
-                # Lấy user_id từ username
-                sender_row = await db.fetch_one("SELECT id FROM users WHERE username = %s", (sender,))
-                recipient_row = await db.fetch_one("SELECT id FROM users WHERE username = %s", (recipient,))
+                # Lấy user_id từ id (client gửi 'from' và 'to' là id)
+                sender_row = await db.fetch_one("SELECT id FROM users WHERE id = %s", (sender,))
+                recipient_row = await db.fetch_one("SELECT id FROM users WHERE id = %s", (recipient,))
                 print(f"[DB] sender_row: {sender_row}, recipient_row: {recipient_row}")
                 if sender_row and recipient_row:
                     print(f"[DB] Lưu tin nhắn: sender_id={sender_row['id']}, receiver_id={recipient_row['id']}, content={message_text}, time_send={timestamp_str}")
