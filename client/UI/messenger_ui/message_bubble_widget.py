@@ -12,80 +12,73 @@ class MessageBubble(QtWidgets.QWidget):
         self.message = message
         self.is_sent = is_sent
         self.timestamp = timestamp or datetime.datetime.now()
+        print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}")
         self._setup_ui()
+        
+        # Force set size và visibility
+        self.setMinimumHeight(50)
+        self.setMaximumHeight(200)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Minimum)
+        self.setVisible(True)
+        self.show()
+        
+        print(f"[DEBUG][MessageBubble] Bubble setup completed, size={self.size()}, visible={self.isVisible()}")
+    
+    def setVisible(self, visible):
+        print(f"[DEBUG][MessageBubble] setVisible called with: {visible}")
+        super().setVisible(visible)
+        print(f"[DEBUG][MessageBubble] setVisible result: {self.isVisible()}")
+    
+    def hideEvent(self, event):
+        print(f"[DEBUG][MessageBubble] hideEvent triggered for message: {self.message}")
+        super().hideEvent(event)
+    
+    def showEvent(self, event):
+        print(f"[DEBUG][MessageBubble] showEvent triggered for message: {self.message}")
+        super().showEvent(event)
     
     def _setup_ui(self):
         """Setup message bubble UI"""
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(15, 8, 15, 8)
+        layout.setContentsMargins(5, 5, 5, 5)
         
-        # Message bubble label
+        # Đơn giản hóa để test - chỉ tạo 1 label cơ bản
         bubble = QtWidgets.QLabel()
         bubble.setText(self.message)
         bubble.setWordWrap(True)
+        bubble.setMinimumHeight(30)
         bubble.setMaximumWidth(400)
-        bubble.setMinimumHeight(45)
-
-        # Timestamp label
-        timestamp_label = QtWidgets.QLabel()
-        timestamp_label.setText(self.get_timestamp_str())
-        timestamp_label.setStyleSheet("""
-            QLabel {
-                color: #888;
-                font-size: 12px;
-                padding-left: 6px;
-                padding-right: 6px;
-            }
-        """)
-        timestamp_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         
+        # Style đơn giản để test
         if self.is_sent:
-            # Sent messages (right, blue gradient)
             bubble.setStyleSheet("""
                 QLabel {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                        stop:0 #0084FF, stop:1 #0066CC);
+                    background-color: #0084FF;
                     color: white;
-                    border-radius: 22px;
-                    padding: 12px 18px;
-                    font-size: 16px;
-                    font-weight: 400;
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    font-size: 14px;
                 }
             """)
-            # Bubble and timestamp in vertical layout
-            bubble_layout = QtWidgets.QVBoxLayout()
-            bubble_layout.setSpacing(2)
-            bubble_layout.addWidget(bubble)
-            bubble_layout.addWidget(timestamp_label)
-            bubble_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
             layout.addStretch()
-            layout.addLayout(bubble_layout)
-        
+            layout.addWidget(bubble)
         else:
-            # Received messages (left, gray) with avatar
-            avatar = self._create_avatar()
-            
             bubble.setStyleSheet("""
                 QLabel {
                     background-color: #F0F0F0;
-                    color: #1c1e21;
-                    border-radius: 22px;
-                    padding: 12px 18px;
-                    font-size: 16px;
-                    font-weight: 400;
-                    border: 1px solid #E4E6EA;
+                    color: black;
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    font-size: 14px;
                 }
             """)
-            # Bubble and timestamp in vertical layout
-            bubble_layout = QtWidgets.QVBoxLayout()
-            bubble_layout.setSpacing(2)
-            bubble_layout.addWidget(bubble)
-            bubble_layout.addWidget(timestamp_label)
-            bubble_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-            layout.addWidget(avatar)
-            layout.addSpacing(8)
-            layout.addLayout(bubble_layout)
+            layout.addWidget(bubble)
             layout.addStretch()
+        
+        # Force properties
+        bubble.setVisible(True)
+        bubble.show()
+        print(f"[DEBUG][MessageBubble] Setup completed with simplified UI")
     
     def _create_avatar(self):
         """Create friend avatar for received messages"""

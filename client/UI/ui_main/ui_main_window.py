@@ -129,8 +129,14 @@ class Ui_MainWindow(QtCore.QObject):
         # Kiểm tra cache, nếu đã có thì dùng lại
         if friend_id in self.chat_windows_cache:
             chat_window, api_client = self.chat_windows_cache[friend_id]
+            # Sử dụng logic đã có trong cache và reconnect signals
+            chat_window.logic = api_client.logic
+            api_client.logic.reconnect_ui_signals()
             self.main_layout.addWidget(chat_window)
             chat_window.show()
+            # Force show all message bubbles when restoring from cache
+            if hasattr(chat_window, '_force_show_all_messages'):
+                chat_window._force_show_all_messages()
         else:
             # Tạo mới chat window và cache lại
             chat_window = ChatWindow(chat_data, pyctalk_client=self.client)

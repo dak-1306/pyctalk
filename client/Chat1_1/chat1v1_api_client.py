@@ -11,8 +11,17 @@ class Chat1v1APIClient:
         })
 
     async def send_message(self, user_id, friend_id, content):
-        return await self.client.send_request("send_message", {
-            "from": user_id,
-            "to": friend_id,
-            "message": content
-        })
+        print(f"[DEBUG][Chat1v1APIClient] send_message called: user_id={user_id}, friend_id={friend_id}, content='{content}'")
+        try:
+            response = await self.client.send_request("send_message", {
+                "from": user_id,
+                "to": friend_id,
+                "message": content
+            })
+            print(f"[DEBUG][Chat1v1APIClient] send_message response: {response}")
+            return response
+        except Exception as e:
+            print(f"[ERROR][Chat1v1APIClient] send_message error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None

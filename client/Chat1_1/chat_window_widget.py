@@ -69,9 +69,17 @@ class ChatWindow(QtWidgets.QWidget):
     def _create_chat_area(self, main_layout):
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
         self.messages_widget = QtWidgets.QWidget()
         self.messages_layout = QtWidgets.QVBoxLayout(self.messages_widget)
-        self.messages_layout.addStretch()
+        self.messages_layout.setContentsMargins(10, 10, 10, 10)
+        self.messages_layout.setSpacing(8)
+        
+        # Không thêm stretch ở đây vì nó có thể gây vấn đề visibility
+        # self.messages_layout.addStretch()
+        
         self.scroll_area.setWidget(self.messages_widget)
         main_layout.addWidget(self.scroll_area)
 
@@ -92,20 +100,112 @@ class ChatWindow(QtWidgets.QWidget):
     # ===== UI actions =====
     def _on_send_clicked(self):
         text = self.txt_message.text().strip()
+        print(f"[DEBUG][ChatWindow] _on_send_clicked: text='{text}'")
         if text:
+            print(f"[DEBUG][ChatWindow] Emitting message_send_requested signal")
             self.message_send_requested.emit(text)
             self.txt_message.clear()
+        else:
+            print(f"[DEBUG][ChatWindow] Empty text, not sending")
 
     def add_message(self, message, is_sent, timestamp=None):
         print(f"[DEBUG][ChatWindow] add_message: message={message}, is_sent={is_sent}, timestamp={timestamp}")
-        bubble = MessageBubble(message, is_sent, timestamp)
-        self.messages_layout.insertWidget(self.messages_layout.count()-1, bubble)
-        QTimer.singleShot(50, self._scroll_to_bottom)
+        try:
+            bubble = MessageBubble(message, is_sent, timestamp)
+            print(f"[DEBUG][ChatWindow] Created MessageBubble: {bubble}")
+            
+            # Kiểm tra layout count trước khi insert
+            count_before = self.messages_layout.count()
+            print(f"[DEBUG][ChatWindow] Layout count before insert: {count_before}")
+            
+            # Loại bỏ stretch item cuối cùng nếu có
+            if count_before > 0:
+                last_item = self.messages_layout.itemAt(count_before - 1)
+                if last_item and last_item.spacerItem():
+                    self.messages_layout.removeItem(last_item)
+                    print(f"[DEBUG][ChatWindow] Removed stretch item")
+            
+            # Thêm message bubble vào layout
+            self.messages_layout.addWidget(bubble)
+            
+            # Thêm stretch ở cuối để đẩy messages lên trên
+            self.messages_layout.addStretch()
+            
+            # Kiểm tra layout count sau khi insert
+            count_after = self.messages_layout.count()
+            print(f"[DEBUG][ChatWindow] Layout count after insert: {count_after}")
+            
+            # Debug widget properties
+            print(f"[DEBUG][ChatWindow] Bubble visible: {bubble.isVisible()}")
+            print(f"[DEBUG][ChatWindow] Bubble size: {bubble.size()}")
+            print(f"[DEBUG][ChatWindow] Messages widget visible: {self.messages_widget.isVisible()}")
+            print(f"[DEBUG][ChatWindow] Scroll area visible: {self.scroll_area.isVisible()}")
+            
+            # Debug parent chain
+            print(f"[DEBUG][ChatWindow] Bubble parent: {bubble.parent()}")
+            print(f"[DEBUG][ChatWindow] Messages widget parent: {self.messages_widget.parent()}")
+            print(f"[DEBUG][ChatWindow] Self visible: {self.isVisible()}")
+            
+            # Debug widget geometry
+            print(f"[DEBUG][ChatWindow] Bubble geometry: {bubble.geometry()}")
+            print(f"[DEBUG][ChatWindow] Messages widget geometry: {self.messages_widget.geometry()}")
+            print(f"[DEBUG][ChatWindow] Scroll area geometry: {self.scroll_area.geometry()}")
+            
+            # Force visibility cho toàn bộ chain
+            bubble.setVisible(True)
+            bubble.show()
+            self.messages_widget.setVisible(True) 
+            self.messages_widget.show()
+            self.scroll_area.setVisible(True)
+            self.scroll_area.show()
+            self.setVisible(True)
+            self.show()
+            
+            # Force updates và repaints
+            bubble.repaint()
+            self.messages_widget.update()
+            self.messages_widget.repaint()
+            self.scroll_area.update()
+            self.scroll_area.repaint()
+            self.update()
+            self.repaint()
+            
+            QTimer.singleShot(50, self._scroll_to_bottom)
+            print(f"[DEBUG][ChatWindow] Message bubble added successfully with forced updates")
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Error adding message: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _scroll_to_bottom(self):
         self.scroll_area.verticalScrollBar().setValue(
             self.scroll_area.verticalScrollBar().maximum()
         )
+    
+    def showEvent(self, event):
+        """Override showEvent to ensure all message bubbles are visible"""
+        super().showEvent(event)
+        print(f"[DEBUG][ChatWindow] showEvent triggered")
+        self._force_show_all_messages()
+    
+    def _force_show_all_messages(self):
+        """Force show all message bubbles in the layout"""
+        print(f"[DEBUG][ChatWindow] Forcing show all message bubbles")
+        for i in range(self.messages_layout.count()):
+            item = self.messages_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'message'):  # Check if it's a MessageBubble
+                    print(f"[DEBUG][ChatWindow] Force showing bubble: {widget.message}")
+                    widget.setVisible(True)
+                    widget.show()
+                    widget.repaint()
+        
+        # Force updates of parent widgets too
+        self.messages_widget.show()
+        self.scroll_area.show()
+        self.update()
+        self.repaint()
 
     def clear_messages(self):
         while self.messages_layout.count() > 1:
