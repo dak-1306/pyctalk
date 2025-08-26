@@ -5,8 +5,8 @@ class Chat1v1APIClient:
 
     async def get_chat_history(self, user_id, friend_id, limit=50):
         return await self.client.send_request("get_chat_history", {
-            "user_id": user_id,
-            "friend_id": friend_id,
+            "user1": user_id,
+            "user2": friend_id,
             "limit": limit
         })
 

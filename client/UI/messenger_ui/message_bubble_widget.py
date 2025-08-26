@@ -25,13 +25,28 @@ class MessageBubble(QtWidgets.QWidget):
         print(f"[DEBUG][MessageBubble] Bubble setup completed, size={self.size()}, visible={self.isVisible()}")
     
     def setVisible(self, visible):
-        print(f"[DEBUG][MessageBubble] setVisible called with: {visible}")
+        print(f"[DEBUG][MessageBubble] setVisible called with: {visible} for message: '{self.message}'")
+        import traceback
+        if not visible:
+            print(f"[DEBUG][MessageBubble] HIDE CALL STACK:")
+            traceback.print_stack()
+            # Force prevent hiding during layout operations
+            print(f"[DEBUG][MessageBubble] PREVENTING HIDE - forcing visible=True")
+            visible = True
         super().setVisible(visible)
         print(f"[DEBUG][MessageBubble] setVisible result: {self.isVisible()}")
     
+    def hide(self):
+        print(f"[DEBUG][MessageBubble] hide() called for message: '{self.message}' - PREVENTED")
+        import traceback
+        print(f"[DEBUG][MessageBubble] HIDE CALL STACK:")
+        traceback.print_stack()
+        # Don't actually hide
+        # super().hide()
+    
     def hideEvent(self, event):
-        print(f"[DEBUG][MessageBubble] hideEvent triggered for message: {self.message}")
-        super().hideEvent(event)
+        print(f"[DEBUG][MessageBubble] hideEvent triggered for message: {self.message} - IGNORED")
+        # super().hideEvent(event)  # Don't process hide events
     
     def showEvent(self, event):
         print(f"[DEBUG][MessageBubble] showEvent triggered for message: {self.message}")

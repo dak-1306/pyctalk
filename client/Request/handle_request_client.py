@@ -14,8 +14,8 @@ class AsyncPycTalkClient:
             request = {
                 "action": "get_chat_history",
                 "data": {
-                    "user_id": data.get("user_id"),
-                    "friend_id": data.get("friend_id"),
+                    "user1": data.get("user_id") or data.get("user1"),
+                    "user2": data.get("friend_id") or data.get("user2"),
                     "limit": data.get("limit", 50)
                 }
             }
@@ -51,8 +51,9 @@ class AsyncPycTalkClient:
         self.user_id = None
         self.username = None
 
-        # Queue ghép request với callback
-        self._callback_queue = asyncio.Queue()
+        # Queue ghép request với callback - sử dụng dict để match theo ID
+        self._pending_requests = {}  # {request_id: callback}
+        self._request_counter = 0
         self._listen_task = None
 
     async def connect(self):
@@ -88,43 +89,67 @@ class AsyncPycTalkClient:
                 self.reader, self.writer = None, None
 
     async def send_json(self, data: dict, callback=None):
-        async with self._io_lock:
-            try:
-                if not self.writer or not self.running:
-                    print("⚠️ Chưa có kết nối hoặc kết nối đã bị đóng.")
-                    return None
+        print(f"[DEBUG] send_json called with data: {data}")
+        try:
+            # Thêm timeout cho lock để tránh deadlock
+            async def acquire_lock_and_send():
+                async with self._io_lock:
+                    print(f"[DEBUG] Acquired io_lock for data: {data}")
+                    try:
+                        if not self.writer or not self.running:
+                            print("⚠️ Chưa có kết nối hoặc kết nối đã bị đóng.")
+                            return None
 
-                # Tạo future để nhận response
-                loop = asyncio.get_running_loop()
-                future = loop.create_future()
+                        # Tạo unique request ID
+                        self._request_counter += 1
+                        request_id = f"req_{self._request_counter}"
+                        
+                        # Tạo future để nhận response
+                        loop = asyncio.get_running_loop()
+                        future = loop.create_future()
+                        print(f"[DEBUG] Created future for data: {data} with ID: {request_id}")
 
-                def _response_callback(response):
-                    if callback:
-                        # Nếu là coroutine thì await, nếu là function thì gọi trực tiếp
-                        if asyncio.iscoroutinefunction(callback):
-                            loop.create_task(callback(response))
-                        else:
-                            callback(response)
-                    if not future.done():
-                        future.set_result(response)
+                        def _response_callback(response):
+                            if callback:
+                                # Nếu là coroutine thì await, nếu là function thì gọi trực tiếp
+                                if asyncio.iscoroutinefunction(callback):
+                                    loop.create_task(callback(response))
+                                else:
+                                    callback(response)
+                            if not future.done():
+                                future.set_result(response)
 
-                # Gửi request
-                json_request = json.dumps(data).encode()
-                prefix = len(json_request).to_bytes(4, 'big')
-                print(f"[DEBUG] Sending request: {data}")
-                self.writer.write(prefix + json_request)
-                await self.writer.drain()
-                # Đưa callback vào queue
-                await self._callback_queue.put(_response_callback)
-                # Chờ response
-                response = await future
-                return response
-            except Exception as e:
-                print(f"❌ Lỗi khi gửi dữ liệu: {e}")
-                await self.disconnect()
-                return None
+                        # Gửi request với ID
+                        request_with_id = {**data, "_request_id": request_id}
+                        json_request = json.dumps(request_with_id).encode()
+                        prefix = len(json_request).to_bytes(4, 'big')
+                        print(f"[DEBUG] Sending request: {request_with_id}")
+                        self.writer.write(prefix + json_request)
+                        await self.writer.drain()
+                        
+                        # Lưu callback theo ID
+                        self._pending_requests[request_id] = _response_callback
+                        print(f"[DEBUG] Callback stored with ID: {request_id}, pending count: {len(self._pending_requests)}")
+                        
+                        # Chờ response
+                        response = await future
+                        print(f"[DEBUG] Received response for request ID {request_id}: {response}")
+                        return response
+                    except Exception as e:
+                        print(f"❌ Lỗi khi gửi dữ liệu: {e}")
+                        await self.disconnect()
+                        return None
+            
+            # Sử dụng wait_for cho Python 3.8 compatibility
+            return await asyncio.wait_for(acquire_lock_and_send(), timeout=5.0)
+        except asyncio.TimeoutError:
+            print(f"[ERROR] Lock timeout for data: {data} - possible deadlock!")
+            return None
+        except Exception as e:
+            print(f"[ERROR] send_json error: {e}")
+            return None
     async def listen_loop(self):
-        """Lắng nghe phản hồi từ server và gọi callback từ queue"""
+        """Lắng nghe phản hồi từ server và gọi callback theo request ID"""
         while self.running and self.reader:
             try:
                 length_prefix = await self.reader.readexactly(4)
@@ -136,13 +161,23 @@ class AsyncPycTalkClient:
                 try:
                     response = json.loads(response_data.decode())
                     print("📥 Phản hồi từ server:", response)
-                    callback = await self._callback_queue.get()
-                    if callback:
-                        # Nếu là coroutine thì await, nếu là function thì gọi trực tiếp
-                        if asyncio.iscoroutinefunction(callback):
-                            await callback(response)
-                        else:
-                            callback(response)
+                    
+                    # Lấy request ID từ response
+                    request_id = response.get("_request_id")
+                    if request_id and request_id in self._pending_requests:
+                        print(f"[DEBUG] Found callback for request ID: {request_id}")
+                        callback = self._pending_requests.pop(request_id)
+                        print(f"[DEBUG] Remaining pending requests: {len(self._pending_requests)}")
+                        if callback:
+                            # Nếu là coroutine thì await, nếu là function thì gọi trực tiếp
+                            if asyncio.iscoroutinefunction(callback):
+                                await callback(response)
+                            else:
+                                callback(response)
+                            print(f"[DEBUG] Callback executed successfully for ID: {request_id}")
+                    else:
+                        print(f"[WARNING] No callback found for request ID: {request_id}")
+                        print(f"[DEBUG] Pending request IDs: {list(self._pending_requests.keys())}")
                 except json.JSONDecodeError as e:
                     print(f"⚠️ Lỗi parse JSON: {e}. Data: {response_data}")
             except asyncio.IncompleteReadError:
@@ -194,6 +229,10 @@ class AsyncPycTalkClient:
             return response
 
     def start_ping(self):
+        # Tạm disable ping để test send_message
+        print("[DEBUG] Ping disabled for testing")
+        return
+        
         async def ping_loop():
             while self.running:
                 try:

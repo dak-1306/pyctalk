@@ -17,7 +17,19 @@ class FriendListLogic:
 
         async def friends_callback(response):
             conversations = []
-            friends = response.get("data", []) if response and isinstance(response, dict) and response.get("success") else []
+            # Handle both old and new response formats
+            if response and isinstance(response, dict):
+                # New format: {'status': 'ok', 'data': [...]}
+                if response.get("status") == "ok":
+                    friends = response.get("data", [])
+                # Old format: {'success': True, 'data': [...]}
+                elif response.get("success"):
+                    friends = response.get("data", [])
+                else:
+                    friends = []
+            else:
+                friends = []
+                
             for friend in friends:
                 if isinstance(friend, dict):
                     friend_id = friend.get('id') or friend.get('friend_id')

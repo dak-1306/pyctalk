@@ -107,6 +107,9 @@ class Ui_MainWindow(QtCore.QObject):
         from client.Chat1_1.chat_window_widget import ChatWindow
         from client.Chat1_1.chat1v1_client import Chat1v1Client
         
+        print(f"[DEBUG][MainWindow] _open_chat_window_1v1 called with chat_data={chat_data}")
+        print(f"[DEBUG][MainWindow] self.user_id={self.user_id}")
+        
         # Ensure current_user_id is set
         chat_data['current_user_id'] = chat_data.get('current_user_id', self.user_id)
         try:
@@ -115,6 +118,8 @@ class Ui_MainWindow(QtCore.QObject):
             pass
             
         friend_id = chat_data.get('friend_id', 1)
+        
+        print(f"[DEBUG][MainWindow] After processing: current_user_id={chat_data['current_user_id']}, friend_id={friend_id}")
         
         # Ẩn card_container nếu đang hiển thị
         if self.card_container and self.card_container.isVisible():
@@ -140,6 +145,12 @@ class Ui_MainWindow(QtCore.QObject):
         else:
             # Tạo mới chat window và cache lại
             chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
+            # Debug: Check values before creating Chat1v1Client
+            print(f"[DEBUG][MainWindow] Creating Chat1v1Client with:")
+            print(f"  chat_data={chat_data}")
+            print(f"  current_user_id={chat_data.get('current_user_id')}")
+            print(f"  friend_id={friend_id}")
+            
             # Khởi tạo api_client và logic, gán logic cho chat_window
             api_client = Chat1v1Client(
                 chat_window,

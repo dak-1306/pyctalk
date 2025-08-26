@@ -15,6 +15,7 @@ class GroupChatLogic:
         self.username = username
         self.current_group = None
         self.message_offset = 0
+        self.loading_lock = asyncio.Lock()  # Prevent concurrent loading
 
         # Kết nối tín hiệu từ UI
         self.ui.group_selected.connect(self.handle_group_selected)
@@ -61,21 +62,22 @@ class GroupChatLogic:
     # Tải tin nhắn nhóm
     # ---------------------------
     async def load_group_messages(self, offset=0, limit=50):
-        if not self.current_group:
-            print("[GroupChatLogic] current_group is None, abort load_group_messages")
-            return
-        response = await self.api_client.get_group_messages(
-            self.current_group["group_id"], self.user_id, limit, offset
-        )
-        if not response:
-            QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
-            return
-        if response.get("success"):
-            messages = response.get("messages", [])
-            self.display_messages(messages, offset, self.username)
-        else:
-            print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
-            QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))    # ---------------------------
+        async with self.loading_lock:  # Prevent concurrent loading
+            if not self.current_group:
+                print("[GroupChatLogic] current_group is None, abort load_group_messages")
+                return
+            response = await self.api_client.get_group_messages(
+                self.current_group["group_id"], self.user_id, limit, offset
+            )
+            if not response:
+                QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
+                return
+            if response.get("success"):
+                messages = response.get("messages", [])
+                self.display_messages(messages, offset, self.username)
+            else:
+                print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
+                QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))    # ---------------------------
     # Hiển thị tin nhắn
     # ---------------------------
     def display_messages(self, messages, offset, username):
