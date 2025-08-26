@@ -177,6 +177,48 @@ class ChatWindow(QtWidgets.QWidget):
             import traceback
             traceback.print_exc()
 
+    def add_system_message(self, message):
+        """Add a system message (like friendship notification)"""
+        try:
+            system_label = QtWidgets.QLabel(message)
+            system_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            system_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e3f2fd;
+                    color: #1976d2;
+                    padding: 10px;
+                    border-radius: 15px;
+                    border: 1px solid #bbdefb;
+                    font-style: italic;
+                    margin: 10px 20px;
+                }
+            """)
+            system_label.setWordWrap(True)
+            
+            # Add to layout
+            self.messages_layout.addWidget(system_label)
+            
+            # Force visibility
+            system_label.setVisible(True)
+            system_label.show()
+            
+            QTimer.singleShot(50, self._scroll_to_bottom)
+            print(f"[DEBUG][ChatWindow] System message added: {message}")
+            
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Error adding system message: {e}")
+
+    def clear_messages(self):
+        """Clear all messages from chat window"""
+        try:
+            while self.messages_layout.count() > 0:
+                item = self.messages_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            print(f"[DEBUG][ChatWindow] All messages cleared")
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Error clearing messages: {e}")
+
     def _scroll_to_bottom(self):
         self.scroll_area.verticalScrollBar().setValue(
             self.scroll_area.verticalScrollBar().maximum()

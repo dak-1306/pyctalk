@@ -182,20 +182,37 @@ class FriendHandler:
 
             user_id, from_user_id = user_result["id"], from_result["id"]
 
+            # Kiểm tra xem đã là bạn bè chưa
+            friend_check_query = """
+                SELECT * FROM friends 
+                WHERE ((user1_id = %s AND user2_id = %s) OR (user1_id = %s AND user2_id = %s))
+                AND status = 'accepted'
+            """
+            existing_friend = await self.db.fetch_one(
+                friend_check_query, (user_id, from_user_id, from_user_id, user_id)
+            )
+
+            # Cập nhật trạng thái friend request
             update_request_query = """
                 UPDATE friend_requests 
                 SET status = 'accepted' 
                 WHERE from_user_id = %s AND to_user_id = %s AND status = 'pending'
             """
-            await self.db.execute(update_request_query, (from_user_id, user_id))
+            result = await self.db.execute(update_request_query, (from_user_id, user_id))
+            
+            # Kiểm tra xem có friend request nào được cập nhật không
+            if result == 0:
+                return {"status": "error", "message": "No pending friend request found"}
 
-            insert_friend_query = """
-                INSERT INTO friends (user1_id, user2_id, status, created_at)
-                VALUES (%s, %s, 'accepted', NOW())
-            """
-            await self.db.execute(
-                insert_friend_query, (min(from_user_id, user_id), max(from_user_id, user_id))
-            )
+            # Chỉ tạo friendship mới nếu chưa tồn tại
+            if not existing_friend:
+                insert_friend_query = """
+                    INSERT INTO friends (user1_id, user2_id, status, created_at)
+                    VALUES (%s, %s, 'accepted', NOW())
+                """
+                await self.db.execute(
+                    insert_friend_query, (min(from_user_id, user_id), max(from_user_id, user_id))
+                )
 
             return {"status": "ok", "message": "Friend request accepted"}
 
@@ -257,6 +274,19 @@ class FriendHandler:
 
         except Exception as e:
             print(f"❌ Lỗi remove_friend: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def handle_friend_request(self, from_username, to_username, action):
+        """Xử lý lời mời kết bạn với username"""
+        try:
+            if action == "accept":
+                return await self.accept_friend(to_username, from_username)
+            elif action == "reject":
+                return await self.reject_friend(to_username, from_username)
+            else:
+                return {"status": "error", "message": "Invalid action"}
+        except Exception as e:
+            print(f"❌ Lỗi handle_friend_request: {e}")
             return {"status": "error", "message": str(e)}
 
 

@@ -139,7 +139,7 @@ class ClientSession:
             elif action == "send_friend_request":
                 sender_username = data["data"]["sender_username"]
                 receiver_username = data["data"]["receiver_username"]
-                result = await self.friend_handler.send_friend_request(sender_username, receiver_username)
+                result = await self.friend_handler.add_friend(sender_username, receiver_username)
                 await self.send_response(result, request_id)
 
             elif action == "get_friend_requests":
@@ -148,9 +148,10 @@ class ClientSession:
                 await self.send_response(result, request_id)
 
             elif action == "handle_friend_request":
-                request_id_param = data["data"]["request_id"]
+                from_username = data["data"]["from_username"]
+                to_username = data["data"]["to_username"]
                 action_param = data["data"]["action"]
-                result = await self.friend_handler.handle_friend_request(request_id_param, action_param)
+                result = await self.friend_handler.handle_friend_request(from_username, to_username, action_param)
                 await self.send_response(result, request_id)
 
             elif action == "search_users":

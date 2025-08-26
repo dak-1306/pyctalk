@@ -95,8 +95,16 @@ class SidebarWidget(QtWidgets.QFrame):
         self.btnAddFriend.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         actions_layout.addWidget(self.btnAddFriend)
 
+        # Nút xem lời mời kết bạn
+        self.btnFriendRequests = QtWidgets.QPushButton("📩 Lời mời kết bạn")
+        self.btnFriendRequests.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        actions_layout.addWidget(self.btnFriendRequests)
+
         # Tích hợp logic gửi kết bạn
         self.btnAddFriend.clicked.connect(self._show_add_friend_dialog)
+        
+        # Tích hợp logic xem lời mời kết bạn
+        self.btnFriendRequests.clicked.connect(self._show_friend_requests)
 
         self.btnSettings = QtWidgets.QPushButton("⚙️ Cài đặt")
         self.btnSettings.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
@@ -115,16 +123,32 @@ class SidebarWidget(QtWidgets.QFrame):
         friend_client = FriendClient(self.client)
 
         def on_friend_request_response(response):
-            if response and response.get("success"):
+            print(f"[DEBUG] Friend request response: {response}")
+            if response and response.get("status") == "ok":
                 QtWidgets.QMessageBox.information(
                     self, "Thành công", f"Đã gửi yêu cầu kết bạn tới {username}!"
                 )
             else:
                 error_msg = (
-                    response.get("error", "Gửi yêu cầu thất bại.")
+                    response.get("message", "Gửi yêu cầu thất bại.")
                     if response else "Không nhận được phản hồi từ server."
                 )
+                print(f"[DEBUG] Friend request error: {error_msg}")
                 QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
 
         import asyncio
         asyncio.create_task(friend_client.send_friend_request(username, on_friend_request_response))
+
+    def _show_friend_requests(self):
+        """Hiển thị cửa sổ lời mời kết bạn"""
+        from client.UI.messenger_ui.friend_requests_window import FriendRequestsWindow
+        
+        self.friend_requests_window = FriendRequestsWindow(self.client, self.username, self)
+        self.friend_requests_window.friend_added.connect(self._on_friend_added)
+        self.friend_requests_window.show()
+        
+    def _on_friend_added(self, friend_data):
+        """Handle when a friend is added from friend requests"""
+        # Refresh friends list
+        if hasattr(self, 'friends_widget') and hasattr(self.friends_widget, 'refresh_conversations'):
+            self.friends_widget.refresh_conversations()

@@ -45,13 +45,19 @@ class Chat1v1Logic:
                     messages = resp['messages']
                 elif 'data' in resp and 'messages' in resp['data']:
                     messages = resp['data']['messages']
+            
             self.ui.clear_messages()
-            for m in messages:
-                sender_id = int(m.get("user_id") or m.get("from"))
-                content = m.get("message", "")
-                timestamp = m.get("timestamp", None)
-                print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}")
-                self.ui.add_message(content, sender_id == self.current_user_id, timestamp)
+            
+            # If no messages, show friendship message
+            if not messages:
+                self.ui.add_system_message("🎉 Các bạn đã là bạn bè với nhau! Hãy bắt đầu trò chuyện!")
+            else:
+                for m in messages:
+                    sender_id = int(m.get("user_id") or m.get("from"))
+                    content = m.get("message", "")
+                    timestamp = m.get("timestamp", None)
+                    print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}")
+                    self.ui.add_message(content, sender_id == self.current_user_id, timestamp)
         except Exception as e:
             print("[ERROR] load_message_history:", e)
 

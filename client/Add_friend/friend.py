@@ -27,9 +27,9 @@ class FriendClient:
 
     async def send_friend_request(self, to_username: str, callback):
         """Gửi yêu cầu kết bạn, truyền callback"""
-        await self._send_action("add_friend", {
-            "from_user": await self.client.get_username(),
-            "to_user": to_username
+        await self._send_action("send_friend_request", {
+            "sender_username": await self.client.get_username(),
+            "receiver_username": to_username
         }, callback)
 
     async def get_friend_suggestions(self, callback):
