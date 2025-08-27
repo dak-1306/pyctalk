@@ -7,12 +7,14 @@ from PyQt6.QtGui import QFont, QCursor
 class MessageBubble(QtWidgets.QWidget):
     """Modern message bubble component for chat"""
     
-    def __init__(self, message, is_sent=True, timestamp=None, parent=None):
+    def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, parent=None):
         super().__init__(parent)
         self.message = message
         self.is_sent = is_sent
         self.timestamp = timestamp or datetime.datetime.now()
-        print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}")
+        self.sender_name = sender_name
+        self.show_sender_name = show_sender_name
+        print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}, sender_name={sender_name}, show_sender_name={show_sender_name}")
         self._setup_ui()
         
         # Force set size và visibility
@@ -50,17 +52,37 @@ class MessageBubble(QtWidgets.QWidget):
     
     def _setup_ui(self):
         """Setup message bubble UI"""
-        layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 2, 5, 2)
+        main_layout.setSpacing(2)
         
-        # Đơn giản hóa để test - chỉ tạo 1 label cơ bản
+        # Hiển thị tên người gửi nếu cần (chỉ cho tin nhắn nhận được)
+        if not self.is_sent and self.show_sender_name and self.sender_name:
+            sender_label = QtWidgets.QLabel(self.sender_name)
+            sender_label.setStyleSheet("""
+                QLabel {
+                    color: #666666;
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin-left: 10px;
+                    margin-bottom: 2px;
+                }
+            """)
+            sender_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            main_layout.addWidget(sender_label)
+        
+        # Container cho bubble chính
+        bubble_layout = QtWidgets.QHBoxLayout()
+        bubble_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Bubble chính
         bubble = QtWidgets.QLabel()
         bubble.setText(self.message)
         bubble.setWordWrap(True)
         bubble.setMinimumHeight(30)
         bubble.setMaximumWidth(400)
         
-        # Style đơn giản để test
+        # Style cho bubble
         if self.is_sent:
             bubble.setStyleSheet("""
                 QLabel {
@@ -71,8 +93,8 @@ class MessageBubble(QtWidgets.QWidget):
                     font-size: 14px;
                 }
             """)
-            layout.addStretch()
-            layout.addWidget(bubble)
+            bubble_layout.addStretch()
+            bubble_layout.addWidget(bubble)
         else:
             bubble.setStyleSheet("""
                 QLabel {
@@ -83,13 +105,15 @@ class MessageBubble(QtWidgets.QWidget):
                     font-size: 14px;
                 }
             """)
-            layout.addWidget(bubble)
-            layout.addStretch()
+            bubble_layout.addWidget(bubble)
+            bubble_layout.addStretch()
+        
+        main_layout.addLayout(bubble_layout)
         
         # Force properties
         bubble.setVisible(True)
         bubble.show()
-        print(f"[DEBUG][MessageBubble] Setup completed with simplified UI")
+        print(f"[DEBUG][MessageBubble] Setup completed with sender name support")
     
     def _create_avatar(self):
         """Create friend avatar for received messages"""

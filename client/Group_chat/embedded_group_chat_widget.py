@@ -48,9 +48,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         except Exception as e:
             logger.error(f"[EmbeddedGroupChatWidget] Lỗi reload tin nhắn: {e}")
 
-    def add_message(self, message, is_sent, timestamp=None):
+    def add_message(self, message, is_sent, timestamp=None, sender_name=None, show_sender_name=False):
         """Thêm một message bubble vào UI (cho logic gọi)"""
-        bubble = MessageBubble(message, is_sent, timestamp)
+        bubble = MessageBubble(message, is_sent, timestamp, sender_name, show_sender_name)
         
         # Remove the stretch item temporarily
         layout_count = self.messages_layout.count()

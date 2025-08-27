@@ -89,17 +89,34 @@ class GroupChatLogic:
         try:
             if offset == 0:
                 self.ui.clear_messages()
-            for msg in messages:
+            
+            # Theo dõi người gửi tin nhắn trước đó để quyết định có hiển thị tên không
+            previous_sender = None
+            
+            for i, msg in enumerate(messages):
                 sender = msg.get('sender_name', 'Unknown')
                 time_str = msg.get("time_send", "Unknown")
                 content = msg.get('content', '')
                 # Fix case-insensitive comparison
                 is_sent = sender.lower() == username.lower()
                 
-                # Debug log để kiểm tra logic
-                print(f"[DEBUG] display_messages: sender='{sender}', username='{username}', is_sent={is_sent}, content='{content[:30]}...'")
+                # Quyết định có hiển thị tên người gửi không
+                show_sender_name = False
+                if not is_sent:  # Chỉ hiển thị tên cho tin nhắn của người khác
+                    # Hiển thị tên nếu:
+                    # 1. Là tin nhắn đầu tiên, hoặc
+                    # 2. Người gửi khác với tin nhắn trước đó
+                    if previous_sender is None or previous_sender.lower() != sender.lower():
+                        show_sender_name = True
                 
-                self.ui.add_message(content, is_sent, time_str)
+                # Debug log để kiểm tra logic
+                print(f"[DEBUG] display_messages: sender='{sender}', username='{username}', is_sent={is_sent}, show_sender_name={show_sender_name}, content='{content[:30]}...'")
+                
+                self.ui.add_message(content, is_sent, time_str, sender, show_sender_name)
+                
+                # Cập nhật người gửi trước đó
+                previous_sender = sender
+                
         except (RuntimeError, AttributeError) as e:
             # Handle UI widget deletion or attribute errors
             print(f"Warning: UI display error in display_messages: {e}")
