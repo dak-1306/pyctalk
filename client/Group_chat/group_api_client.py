@@ -43,9 +43,9 @@ class GroupAPIClient:
 
     async def send_group_message(self, sender_id: str, group_id: str, content: str):
         return await self._send("send_group_message", {
-            "sender_id": sender_id,
+            "user_id": sender_id,  # Server expects user_id, not sender_id
             "group_id": group_id,
-            "content": content
+            "message": content  # Server expects message, not content
         })
 
     async def get_friends(self, user_id: str):

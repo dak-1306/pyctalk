@@ -155,16 +155,23 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
 
     async def _send_message_async(self, content):
         """Gửi tin nhắn async (giữ nguyên logic cũ)"""
+        print(f"[DEBUG] Sending group message: user_id={self.user_id}, group_id={self.group_data['group_id']}, content='{content}'")
+        
         # Giữ nguyên việc dùng self.group_data["group_id"] như bản cũ
         response = await self.api_client.send_group_message(
             self.user_id, self.group_data["group_id"], content
         )
+        
+        print(f"[DEBUG] Send group message response: {response}")
 
         if response and response.get("success"):
             self.message_input.clear()
+            print(f"[DEBUG] Message sent successfully, reloading messages")
             await self.logic.load_group_messages(offset=0)
         else:
-            QtWidgets.QMessageBox.warning(self, "Lỗi", "Không thể gửi tin nhắn")
+            error_msg = response.get("message", "Không thể gửi tin nhắn") if response else "Không có phản hồi từ server"
+            print(f"[DEBUG] Failed to send message: {error_msg}")
+            QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
 
     def _add_message_bubble(self, message, is_sent, timestamp=None):
         """Helper method for adding message bubbles"""

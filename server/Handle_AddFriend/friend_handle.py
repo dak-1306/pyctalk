@@ -289,6 +289,100 @@ class FriendHandler:
             print(f"❌ Lỗi handle_friend_request: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def get_sent_friend_requests(self, username):
+        """Lấy danh sách lời mời kết bạn đã gửi"""
+        try:
+            print(f"[DEBUG] get_sent_friend_requests called for username: {username}")
+            
+            user_result = await self.db.fetch_one(
+                "SELECT id FROM users WHERE username = %s", (username,)
+            )
+            
+            if not user_result:
+                print(f"[DEBUG] User not found: {username}")
+                return {"status": "error", "message": "User not found"}
+            
+            user_id = user_result["id"]
+            print(f"[DEBUG] Found user_id: {user_id} for username: {username}")
+            
+            # Lấy danh sách lời mời đã gửi (status = 'pending')
+            query = """
+                SELECT 
+                    fr.id as request_id,
+                    u.username as receiver_username,
+                    fr.created_at
+                FROM friend_requests fr
+                JOIN users u ON fr.to_user_id = u.id
+                WHERE fr.from_user_id = %s AND fr.status = 'pending'
+                ORDER BY fr.created_at DESC
+            """
+            
+            print(f"[DEBUG] Executing query with user_id: {user_id}")
+            results = await self.db.fetch_all(query, (user_id,))
+            print(f"[DEBUG] Query returned {len(results) if results else 0} results: {results}")
+            
+            # Debug: Check raw data in friend_requests table
+            debug_query = "SELECT * FROM friend_requests WHERE from_user_id = %s"
+            debug_results = await self.db.fetch_all(debug_query, (user_id,))
+            print(f"[DEBUG] Raw friend_requests for user_id {user_id}: {debug_results}")
+            
+            # Convert to list of dictionaries
+            sent_requests = []
+            for row in results:
+                sent_requests.append({
+                    "request_id": row["request_id"],
+                    "receiver_username": row["receiver_username"],
+                    "created_at": str(row["created_at"]) if row["created_at"] else "",
+                    "status": "pending"
+                })
+            
+            print(f"✅ Lấy {len(sent_requests)} lời mời đã gửi cho {username}")
+            return {"status": "ok", "data": sent_requests}
+            
+        except Exception as e:
+            print(f"❌ Lỗi get_sent_friend_requests: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def cancel_friend_request(self, sender_username, receiver_username):
+        """Thu hồi lời mời kết bạn đã gửi"""
+        try:
+            sender_result = await self.db.fetch_one(
+                "SELECT id FROM users WHERE username = %s", (sender_username,)
+            )
+            receiver_result = await self.db.fetch_one(
+                "SELECT id FROM users WHERE username = %s", (receiver_username,)
+            )
+            
+            if not sender_result or not receiver_result:
+                return {"status": "error", "message": "User not found"}
+            
+            sender_id = sender_result["id"]
+            receiver_id = receiver_result["id"]
+            
+            # Kiểm tra xem có lời mời pending không
+            check_query = """
+                SELECT id FROM friend_requests 
+                WHERE from_user_id = %s AND to_user_id = %s AND status = 'pending'
+            """
+            existing_request = await self.db.fetch_one(check_query, (sender_id, receiver_id))
+            
+            if not existing_request:
+                return {"status": "error", "message": "No pending friend request found"}
+            
+            # Xóa lời mời kết bạn
+            delete_query = """
+                DELETE FROM friend_requests 
+                WHERE from_user_id = %s AND to_user_id = %s AND status = 'pending'
+            """
+            await self.db.execute(delete_query, (sender_id, receiver_id))
+            
+            print(f"✅ Đã thu hồi lời mời kết bạn từ {sender_username} tới {receiver_username}")
+            return {"status": "ok", "message": "Friend request cancelled successfully"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi cancel_friend_request: {e}")
+            return {"status": "error", "message": str(e)}
+
 
 # Global instance
 friend_handler = FriendHandler()

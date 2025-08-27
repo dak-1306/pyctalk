@@ -100,11 +100,27 @@ class SidebarWidget(QtWidgets.QFrame):
         self.btnFriendRequests.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         actions_layout.addWidget(self.btnFriendRequests)
 
+        # Nút xem lời mời đã gửi
+        self.btnSentRequests = QtWidgets.QPushButton("📤 Lời mời đã gửi")
+        self.btnSentRequests.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        actions_layout.addWidget(self.btnSentRequests)
+
+        # Nút quản lý bạn bè
+        self.btnManageFriends = QtWidgets.QPushButton("👥 Quản lý bạn bè")
+        self.btnManageFriends.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        actions_layout.addWidget(self.btnManageFriends)
+
         # Tích hợp logic gửi kết bạn
         self.btnAddFriend.clicked.connect(self._show_add_friend_dialog)
         
         # Tích hợp logic xem lời mời kết bạn
         self.btnFriendRequests.clicked.connect(self._show_friend_requests)
+        
+        # Tích hợp logic xem lời mời đã gửi
+        self.btnSentRequests.clicked.connect(self._show_sent_requests)
+        
+        # Tích hợp logic quản lý bạn bè
+        self.btnManageFriends.clicked.connect(self._show_friends_management)
 
         self.btnSettings = QtWidgets.QPushButton("⚙️ Cài đặt")
         self.btnSettings.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
@@ -146,6 +162,36 @@ class SidebarWidget(QtWidgets.QFrame):
         self.friend_requests_window = FriendRequestsWindow(self.client, self.username, self)
         self.friend_requests_window.friend_added.connect(self._on_friend_added)
         self.friend_requests_window.show()
+        
+    def _show_sent_requests(self):
+        """Hiển thị cửa sổ lời mời đã gửi"""
+        from client.UI.messenger_ui.sent_requests_window import SentRequestsWindow
+        
+        self.sent_requests_window = SentRequestsWindow(self.client, self.username, self)
+        self.sent_requests_window.show()
+        
+    def _show_friends_management(self):
+        """Hiển thị cửa sổ quản lý bạn bè"""
+        from client.UI.messenger_ui.friends_management_window import FriendsManagementWindow
+        
+        self.friends_management_window = FriendsManagementWindow(self.client, self.username, self.user_id, self)
+        # Connect signal để xử lý khi user chọn nhắn tin với bạn bè
+        self.friends_management_window.chat_friend_requested.connect(self._handle_chat_friend_from_management)
+        self.friends_management_window.show()
+        
+    def _handle_chat_friend_from_management(self, friend_data):
+        """Handle when user wants to chat with a friend from friends management"""
+        print(f"[DEBUG] Chat with friend requested from management: {friend_data}")
+        
+        # Find the parent window (main window) and call the chat method
+        parent_window = self.parent()
+        while parent_window and not hasattr(parent_window, '_open_chat_window_1v1'):
+            parent_window = parent_window.parent()
+            
+        if parent_window and hasattr(parent_window, '_open_chat_window_1v1'):
+            parent_window._open_chat_window_1v1(friend_data)
+        else:
+            print("[ERROR] Could not find main window to open chat")
         
     def _on_friend_added(self, friend_data):
         """Handle when a friend is added from friend requests"""

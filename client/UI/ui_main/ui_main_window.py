@@ -169,6 +169,11 @@ class Ui_MainWindow(QtCore.QObject):
             
         self.current_chat_friend_id = friend_id
 
+    def _handle_chat_friend_from_sidebar(self, friend_data):
+        """Handle chat request from sidebar friends management"""
+        print(f"[DEBUG][MainWindow] Chat request from sidebar: {friend_data}")
+        self._open_chat_window_1v1(friend_data)
+
     def _show_main_view(self):
         """Hiển thị main view (card) và ẩn chat windows"""
         # Ẩn chat window hiện tại
@@ -356,6 +361,11 @@ class Ui_MainWindow(QtCore.QObject):
     # self.btnGroupChat đã bị loại bỏ
         self.btnSettings.clicked.connect(self.show_settings)
         self.btnThemeToggle.clicked.connect(self.toggle_theme)
+        
+        # Sidebar signal connections
+        if hasattr(self.sidebar, '_handle_chat_friend_from_management'):
+            # Override the sidebar's chat handler to use main window's method
+            self.sidebar._handle_chat_friend_from_management = self._handle_chat_friend_from_sidebar
         
         # Window events
         self.main_window.closeEvent = self.closeEvent

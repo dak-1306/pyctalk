@@ -147,11 +147,30 @@ class ClientSession:
                 result = await self.friend_handler.get_friend_requests(username)
                 await self.send_response(result, request_id)
 
+            elif action == "get_sent_friend_requests":
+                username = data["data"]["username"]
+                print(f"[DEBUG] Server: get_sent_friend_requests for username={username}")
+                result = await self.friend_handler.get_sent_friend_requests(username)
+                print(f"[DEBUG] Server: get_sent_friend_requests result={result}")
+                await self.send_response(result, request_id)
+
             elif action == "handle_friend_request":
                 from_username = data["data"]["from_username"]
                 to_username = data["data"]["to_username"]
                 action_param = data["data"]["action"]
                 result = await self.friend_handler.handle_friend_request(from_username, to_username, action_param)
+                await self.send_response(result, request_id)
+
+            elif action == "cancel_friend_request":
+                sender_username = data["data"]["sender_username"]
+                receiver_username = data["data"]["receiver_username"]
+                result = await self.friend_handler.cancel_friend_request(sender_username, receiver_username)
+                await self.send_response(result, request_id)
+
+            elif action == "remove_friend":
+                username = data["data"]["username"]
+                friend_name = data["data"]["friend_name"]
+                result = await self.friend_handler.remove_friend(username, friend_name)
                 await self.send_response(result, request_id)
 
             elif action == "search_users":
@@ -184,7 +203,7 @@ class ClientSession:
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]
                 message = data["data"]["message"]
-                result = await self.group_handler.send_group_message(group_id, user_id, message)
+                result = await self.group_handler.send_group_message(user_id, group_id, message)  # Fixed parameter order
                 await self.send_response(result, request_id)
 
             elif action == "join_group":
