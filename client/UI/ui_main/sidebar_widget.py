@@ -76,6 +76,10 @@ class SidebarWidget(QtWidgets.QFrame):
         group_actions = QtWidgets.QHBoxLayout()
         self.create_group_btn = QtWidgets.QPushButton("+ Tạo nhóm")
         self.join_group_btn = QtWidgets.QPushButton("🔗 Tham gia")
+        
+        # Connect create group button
+        self.create_group_btn.clicked.connect(self._show_create_group_window)
+        
         group_actions.addWidget(self.create_group_btn)
         group_actions.addWidget(self.join_group_btn)
         layout.addLayout(group_actions)
@@ -198,3 +202,22 @@ class SidebarWidget(QtWidgets.QFrame):
         # Refresh friends list
         if hasattr(self, 'friends_widget') and hasattr(self.friends_widget, 'refresh_conversations'):
             self.friends_widget.refresh_conversations()
+
+    def _show_create_group_window(self):
+        """Hiển thị cửa sổ tạo nhóm mới"""
+        from client.UI.messenger_ui.create_group_window import CreateGroupWindow
+        
+        self.create_group_window = CreateGroupWindow(self.client, self.username, self.user_id, self)
+        # Connect signal để refresh danh sách nhóm khi tạo nhóm thành công
+        self.create_group_window.group_created.connect(self._on_group_created)
+        self.create_group_window.show()
+        
+    def _on_group_created(self, group_data):
+        """Handle when a new group is created"""
+        print(f"[DEBUG] New group created: {group_data}")
+        
+        # Refresh groups list
+        if hasattr(self, 'groups_widget') and hasattr(self.groups_widget, 'refresh_groups'):
+            self.groups_widget.refresh_groups()
+        elif hasattr(self, 'groups_widget') and hasattr(self.groups_widget, '_load_groups'):
+            asyncio.create_task(self.groups_widget._load_groups())

@@ -193,6 +193,12 @@ class ClientSession:
                 result = await self.group_handler.get_user_groups(user_id)
                 await self.send_response(result, request_id)
 
+            elif action == "add_user_to_group":
+                group_id = data["data"]["group_id"]
+                user_id = data["data"]["user_id"]
+                result = await self.group_handler.add_user_to_group(group_id, user_id)
+                await self.send_response(result, request_id)
+
             elif action == "get_group_messages":
                 group_id = data["data"]["group_id"]
                 user_id = data["data"]["user_id"]

@@ -72,9 +72,9 @@ class GroupHandler:
                 "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
                 (group_id, created_by)
             )
-            return {"success": True, "message": f"Tạo nhóm '{group_name}' thành công", "group_id": group_id}
+            return {"status": "ok", "message": f"Tạo nhóm '{group_name}' thành công", "group_id": group_id}
         except Exception as e:
-            return {"success": False, "message": f"Lỗi tạo nhóm: {str(e)}"}
+            return {"status": "error", "message": f"Lỗi tạo nhóm: {str(e)}"}
 
     async def add_member_to_group(self, group_id: int, user_id: int, added_by: int) -> dict:
         """Thêm thành viên vào nhóm"""
@@ -249,3 +249,36 @@ class GroupHandler:
             }
         except Exception as e:
             return {"success": False, "message": f"Lỗi lấy danh sách thành viên: {str(e)}"}
+
+    async def add_user_to_group(self, group_id: int, user_id: int) -> dict:
+        """Thêm người dùng vào nhóm (đơn giản, không kiểm tra admin)"""
+        try:
+            # Kiểm tra nhóm tồn tại
+            group_exists = await db.fetch_one("SELECT group_id FROM group_chat WHERE group_id = %s", (group_id,))
+            if not group_exists:
+                return {"status": "error", "message": "Nhóm không tồn tại"}
+            
+            # Kiểm tra user tồn tại
+            user_exists = await db.fetch_one("SELECT id FROM users WHERE id = %s", (user_id,))
+            if not user_exists:
+                return {"status": "error", "message": "Người dùng không tồn tại"}
+            
+            # Kiểm tra đã là thành viên chưa
+            already_member = await db.fetch_one(
+                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, user_id)
+            )
+            if already_member:
+                return {"status": "error", "message": "Người dùng đã là thành viên của nhóm"}
+            
+            # Thêm vào nhóm
+            await db.execute(
+                "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
+                (group_id, user_id)
+            )
+            
+            return {"status": "ok", "message": "Đã thêm thành viên vào nhóm"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi add_user_to_group: {e}")
+            return {"status": "error", "message": str(e)}

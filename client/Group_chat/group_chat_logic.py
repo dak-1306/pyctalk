@@ -17,6 +17,9 @@ class GroupChatLogic:
         self.message_offset = 0
         self.loading_lock = asyncio.Lock()  # Prevent concurrent loading
 
+        # Debug log để kiểm tra thông tin user
+        print(f"[DEBUG] GroupChatLogic init: user_id={user_id}, username='{username}'")
+
         # Kết nối tín hiệu từ UI
         self.ui.group_selected.connect(self.handle_group_selected)
         self.ui.message_send_requested.connect(self.send_message)
@@ -74,6 +77,8 @@ class GroupChatLogic:
                 return
             if response.get("success"):
                 messages = response.get("messages", [])
+                print(f"[DEBUG] load_group_messages: Loaded {len(messages)} messages for group_id={self.current_group['group_id']}")
+                print(f"[DEBUG] load_group_messages: First few messages: {messages[:3] if messages else 'None'}")
                 self.display_messages(messages, offset, self.username)
             else:
                 print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
@@ -88,7 +93,12 @@ class GroupChatLogic:
                 sender = msg.get('sender_name', 'Unknown')
                 time_str = msg.get("time_send", "Unknown")
                 content = msg.get('content', '')
-                is_sent = sender == username
+                # Fix case-insensitive comparison
+                is_sent = sender.lower() == username.lower()
+                
+                # Debug log để kiểm tra logic
+                print(f"[DEBUG] display_messages: sender='{sender}', username='{username}', is_sent={is_sent}, content='{content[:30]}...'")
+                
                 self.ui.add_message(content, is_sent, time_str)
         except (RuntimeError, AttributeError) as e:
             # Handle UI widget deletion or attribute errors
@@ -98,7 +108,7 @@ class GroupChatLogic:
                 self.ui.messages.extend([
                     {
                         'content': msg.get('content', ''),
-                        'is_sent': msg.get('sender_name', '') == username,
+                        'is_sent': msg.get('sender_name', '').lower() == username.lower(),
                         'timestamp': msg.get('time_send', '')
                     } for msg in messages
                 ])

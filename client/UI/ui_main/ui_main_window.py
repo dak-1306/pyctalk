@@ -762,6 +762,7 @@ class Ui_MainWindow(QtCore.QObject):
         # Xóa tham chiếu đến status_message để tránh lỗi khi widget đã bị xóa
         self.status_message = None
         # Thêm khung chat nhóm mới
+        print(f"[DEBUG] Creating EmbeddedGroupChatWidget with user_id={self.user_id}, username='{self.username}'")
         chat_widget = EmbeddedGroupChatWidget(self.client, self.user_id, self.username, group_data)
         self.main_layout.addWidget(chat_widget, 1)
         # Luôn reload lại tin nhắn khi chuyển nhóm
