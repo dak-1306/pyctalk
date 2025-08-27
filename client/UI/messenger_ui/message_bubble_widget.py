@@ -1,11 +1,12 @@
 import datetime
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
 
 
 class MessageBubble(QtWidgets.QWidget):
     """Modern message bubble component for chat"""
+    sender_clicked = pyqtSignal(str)  # Signal when sender name is clicked
     
     def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, parent=None):
         super().__init__(parent)
@@ -58,17 +59,23 @@ class MessageBubble(QtWidgets.QWidget):
         
         # Hiển thị tên người gửi nếu cần (chỉ cho tin nhắn nhận được)
         if not self.is_sent and self.show_sender_name and self.sender_name:
-            sender_label = QtWidgets.QLabel(self.sender_name)
+            sender_label = QtWidgets.QLabel(f"👤 {self.sender_name}")
             sender_label.setStyleSheet("""
                 QLabel {
-                    color: #666666;
+                    color: #0084FF;
                     font-size: 12px;
                     font-weight: bold;
                     margin-left: 10px;
                     margin-bottom: 2px;
                 }
+                QLabel:hover {
+                    color: #006BB3;
+                    text-decoration: underline;
+                }
             """)
             sender_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            sender_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            sender_label.mousePressEvent = lambda event: self.sender_clicked.emit(self.sender_name)
             main_layout.addWidget(sender_label)
         
         # Container cho bubble chính

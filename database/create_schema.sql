@@ -87,5 +87,21 @@ CREATE TABLE group_members (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Bảng thông tin cá nhân mở rộng
+CREATE TABLE user_profiles (
+    user_id INT NOT NULL PRIMARY KEY,
+    display_name VARCHAR(100) DEFAULT '',
+    bio TEXT DEFAULT '',
+    gender ENUM('male', 'female', 'other', 'not_specified') DEFAULT 'not_specified',
+    birth_date DATE DEFAULT NULL,
+    phone VARCHAR(20) DEFAULT '',
+    location VARCHAR(100) DEFAULT '',
+    avatar_url VARCHAR(255) DEFAULT '',
+    privacy_settings JSON DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Thông báo hoàn thành
 SELECT 'Database schema created successfully!' as status;

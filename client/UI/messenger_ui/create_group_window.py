@@ -58,8 +58,20 @@ class FriendSelectionItem(QtWidgets.QWidget):
             }
         """)
         
+    def set_selected(self, selected):
+        """Programmatically set selection state"""
+        self.checkbox.setChecked(selected)
+        
+    def is_checked(self):
+        """Get current checkbox state"""
+        return self.checkbox.isChecked()
+        
     def _on_selection_changed(self, state):
+        # Fix: So sánh với int value thay vì enum
         self.is_selected = state == QtCore.Qt.CheckState.Checked.value
+        print(f"[DEBUG] Friend selection changed: {self.friend_data.get('friend_name')} = {self.is_selected}")
+        print(f"[DEBUG] Checkbox state value: {state}, CheckState.Checked.value: {QtCore.Qt.CheckState.Checked.value}")
+        print(f"[DEBUG] State comparison result: {state == QtCore.Qt.CheckState.Checked.value}")
         self.selection_changed.emit(self.friend_data, self.is_selected)
         
         # Update visual style based on selection
@@ -353,6 +365,8 @@ class CreateGroupWindow(QtWidgets.QDialog):
             
     def _display_friends(self, friends):
         """Display friends in the UI"""
+        print(f"[DEBUG] _display_friends called with {len(friends)} friends")
+        
         # Clear existing items (except stretch)
         while self.friends_layout.count() > 1:
             item = self.friends_layout.takeAt(0)
@@ -361,9 +375,26 @@ class CreateGroupWindow(QtWidgets.QDialog):
         
         # Add friend selection items
         for friend in friends:
+            print(f"[DEBUG] Creating FriendSelectionItem for: {friend}")
             friend_item = FriendSelectionItem(friend)
             friend_item.selection_changed.connect(self._on_friend_selection_changed)
             self.friends_layout.insertWidget(self.friends_layout.count() - 1, friend_item)
+            print(f"[DEBUG] Added FriendSelectionItem, signal connected")
+            
+        # Test: Programmatically select first friend for debugging
+        if friends:
+            QtCore.QTimer.singleShot(1000, self._test_select_first_friend)
+            
+    def _test_select_first_friend(self):
+        """Test method to programmatically select first friend"""
+        print("[DEBUG] Testing programmatic selection...")
+        for i in range(self.friends_layout.count()):
+            item = self.friends_layout.itemAt(i)
+            if item and item.widget() and isinstance(item.widget(), FriendSelectionItem):
+                friend_item = item.widget()
+                print(f"[DEBUG] Testing selection for: {friend_item.friend_data.get('friend_name')}")
+                friend_item.set_selected(True)
+                break
             
     def _filter_friends(self, search_text):
         """Filter friends based on search text"""
@@ -400,6 +431,9 @@ class CreateGroupWindow(QtWidgets.QDialog):
     def _on_friend_selection_changed(self, friend_data, is_selected):
         """Handle when a friend is selected/deselected"""
         friend_id = friend_data.get('friend_id')
+        friend_name = friend_data.get('friend_name')
+        
+        print(f"[DEBUG] _on_friend_selection_changed: {friend_name} (ID: {friend_id}) = {is_selected}")
         
         if is_selected:
             self.selected_friends[friend_id] = friend_data
@@ -409,6 +443,7 @@ class CreateGroupWindow(QtWidgets.QDialog):
         # Update summary
         count = len(self.selected_friends)
         self.selected_summary.setText(f"👥 Đã chọn: {count} bạn bè")
+        print(f"[DEBUG] Selected friends count: {count}")
         
         # Update form validation
         self._validate_form()
@@ -419,7 +454,37 @@ class CreateGroupWindow(QtWidgets.QDialog):
         has_members = len(self.selected_friends) > 0
         
         is_valid = bool(group_name and has_members)
+        print(f"[DEBUG] Form validation: group_name='{group_name}', has_members={has_members}, is_valid={is_valid}")
+        
         self.create_btn.setEnabled(is_valid)
+        
+        if is_valid:
+            self.create_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #27ae60;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #229954;
+                }
+            """)
+        else:
+            self.create_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #bdc3c7;
+                    color: #7f8c8d;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+            """)
         
     async def _create_group(self):
         """Create the group"""

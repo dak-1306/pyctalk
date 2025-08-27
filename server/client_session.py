@@ -29,6 +29,17 @@ class ClientSession:
             print(f"Không thể import chat_handler: {e}")
             self.chat1v1_handler = None
 
+        # User profile handler
+        try:
+            from HandleUserProfile.user_profile_handler import UserProfileHandler
+            self.user_profile_handler = UserProfileHandler()
+            print(f"✅ UserProfileHandler imported successfully: {self.user_profile_handler}")
+        except Exception as e:
+            print(f"❌ Không thể import UserProfileHandler: {e}")
+            import traceback
+            traceback.print_exc()
+            self.user_profile_handler = None
+
     async def run(self):
         print(f"🟢 Client {self.client_address} session started.")
         try:
@@ -233,6 +244,37 @@ class ClientSession:
             elif action == "send_message" and self.chat1v1_handler:
                 print(f"[DEBUG] Server received send_message: {data}")
                 result = await self.chat1v1_handler.handle_message_request(self.reader, self.writer, data)
+                await self.send_response(result, request_id)
+
+            elif action == "get_user_profile":
+                if self.user_profile_handler:
+                    print(f"[DEBUG] Processing get_user_profile action with handler: {self.user_profile_handler}")
+                    user_id = data["data"]["user_id"]
+                    print(f"[DEBUG] get_user_profile for user_id: {user_id}")
+                    result = await self.user_profile_handler.get_user_profile(user_id)
+                    print(f"[DEBUG] get_user_profile result: {result}")
+                    await self.send_response(result, request_id)
+                else:
+                    print("[ERROR] get_user_profile action but no user_profile_handler available")
+                    await self.send_response({"status": "error", "message": "User profile handler not available"}, request_id)
+
+            elif action == "get_mutual_groups":
+                if self.user_profile_handler:
+                    print(f"[DEBUG] Processing get_mutual_groups action with handler: {self.user_profile_handler}")
+                    user1_id = data["data"]["user1_id"]
+                    user2_id = data["data"]["user2_id"]
+                    print(f"[DEBUG] get_mutual_groups for user1_id: {user1_id}, user2_id: {user2_id}")
+                    result = await self.user_profile_handler.get_mutual_groups(user1_id, user2_id)
+                    print(f"[DEBUG] get_mutual_groups result: {result}")
+                    await self.send_response(result, request_id)
+                else:
+                    print("[ERROR] get_mutual_groups action but no user_profile_handler available")
+                    await self.send_response({"status": "error", "message": "User profile handler not available"}, request_id)
+
+            elif action == "update_user_profile" and self.user_profile_handler:
+                user_id = data["data"]["user_id"]
+                profile_data = data["data"]["profile_data"]
+                result = await self.user_profile_handler.update_user_profile(user_id, profile_data)
                 await self.send_response(result, request_id)
 
             else:

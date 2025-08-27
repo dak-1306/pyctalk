@@ -9,6 +9,7 @@ from PyQt6.QtGui import QAction
 from client.UI.ui_main.topbar_widget import TopBarWidget
 from client.UI.ui_main.sidebar_widget import SidebarWidget
 from client.UI.ui_main.main_card_widget import MainCardWidget
+from client.UI.messenger_ui.my_profile_window import MyProfileWindow
 from client.Group_chat.embedded_group_chat_widget import EmbeddedGroupChatWidget
 # Logic/helpers
 from .status_thread import StatusUpdateThread
@@ -362,6 +363,10 @@ class Ui_MainWindow(QtCore.QObject):
         self.btnSettings.clicked.connect(self.show_settings)
         self.btnThemeToggle.clicked.connect(self.toggle_theme)
         
+        # Avatar click to open profile
+        if hasattr(self.topbar, 'avatar_clicked'):
+            self.topbar.avatar_clicked.connect(self._open_my_profile)
+        
         # Sidebar signal connections
         if hasattr(self.sidebar, '_handle_chat_friend_from_management'):
             # Override the sidebar's chat handler to use main window's method
@@ -524,6 +529,25 @@ class Ui_MainWindow(QtCore.QObject):
         """Set window title and other translatable strings"""
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "PycTalk - Enhanced Chat Client"))
+    
+    def _open_my_profile(self):
+        """Open current user's profile window"""
+        try:
+            print(f"[DEBUG] Opening profile for user: {self.username} (ID: {self.user_id})")
+            profile_window = MyProfileWindow(
+                client=self.client,
+                user_id=self.user_id,
+                username=self.username,
+                parent=self.main_window
+            )
+            profile_window.show()
+        except Exception as e:
+            print(f"[ERROR] Failed to open profile window: {e}")
+            QtWidgets.QMessageBox.critical(
+                self.main_window,
+                "Lỗi",
+                f"Không thể mở cửa sổ hồ sơ: {str(e)}"
+            )
     
     def show_settings(self):
         """Show settings dialog"""

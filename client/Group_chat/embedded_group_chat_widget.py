@@ -52,6 +52,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         """Thêm một message bubble vào UI (cho logic gọi)"""
         bubble = MessageBubble(message, is_sent, timestamp, sender_name, show_sender_name)
         
+        # Connect sender clicked signal
+        bubble.sender_clicked.connect(self._handle_sender_clicked)
+        
         # Remove the stretch item temporarily
         layout_count = self.messages_layout.count()
         stretch_item = None
@@ -213,6 +216,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 members = response.get("members", [])
                 member_count = len(members)
                 
+                # Store members data for later use
+                self.logic.group_members = members
+                
                 # Tạo danh sách tên thành viên
                 member_names = [member.get("username", "Unknown") for member in members]
                 
@@ -241,3 +247,50 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         except Exception as e:
             logger.error(f"[EmbeddedGroupChatWidget] Lỗi load thành viên: {e}")
             self.members_info_label.setText("❌ Lỗi tải thông tin thành viên")
+
+    def _handle_sender_clicked(self, sender_name):
+        """Handle when user clicks on sender name"""
+        print(f"[DEBUG] Sender clicked: {sender_name}")
+        
+        # Find user_id for the sender_name
+        user_data = {
+            'username': sender_name,
+            'friend_name': sender_name
+        }
+        
+        # Try to get user_id from group members
+        try:
+            # Search in loaded group members if available
+            if hasattr(self.logic, 'group_members') and self.logic.group_members:
+                print(f"[DEBUG] Found {len(self.logic.group_members)} group members")
+                for member in self.logic.group_members:
+                    print(f"[DEBUG] Member: {member}")
+                    if member.get('username') == sender_name:
+                        user_data['user_id'] = member.get('user_id')
+                        user_data['friend_id'] = member.get('user_id')
+                        print(f"[DEBUG] Found user_id: {user_data['user_id']} for {sender_name}")
+                        break
+            else:
+                print(f"[DEBUG] No group members found or logic doesn't have group_members")
+        except Exception as e:
+            print(f"[DEBUG] Error finding user_id: {e}")
+        
+        print(f"[DEBUG] Final user_data: {user_data}")
+        self._show_user_profile(user_data)
+        
+    def _show_user_profile(self, user_data):
+        """Show user profile window"""
+        try:
+            from client.UI.messenger_ui.user_profile_window import UserProfileWindow
+            
+            profile_window = UserProfileWindow(
+                user_data=user_data,
+                current_user_id=self.user_id,
+                client=self.api_client.connection,  # Fix: dùng connection từ api_client
+                parent=self
+            )
+            profile_window.show()
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to show user profile: {e}")
+            QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể hiển thị thông tin người dùng: {str(e)}")
