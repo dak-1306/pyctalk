@@ -237,6 +237,48 @@ class ClientSession:
                 message = data["data"]["message"]
                 result = await self.group_handler.send_group_message(user_id, group_id, message)  # Fixed parameter order
                 await self.send_response(result, request_id)
+                
+                # Push real-time group message to all group members if send successful
+                if result.get("success") and self.chat1v1_handler:
+                    try:
+                        message_data = result.get("message_data", {})
+                        # Get group members to push message
+                        members_result = await self.group_handler.get_group_members(group_id, user_id)
+                        
+                        if members_result.get("success"):
+                            members = members_result.get("members", [])
+                            push_message = {
+                                "action": "new_group_message",
+                                "data": {
+                                    "message_id": message_data.get("message_id"),
+                                    "user_id": message_data.get("sender_id"),
+                                    "group_id": message_data.get("group_id"),
+                                    "message": message_data.get("content"),
+                                    "timestamp": message_data.get("time_send"),
+                                    "username": message_data.get("sender_name")
+                                }
+                            }
+                            
+                            # Push to all online group members except sender
+                            for member in members:
+                                member_id = str(member.get("user_id", ""))
+                                if member_id != str(user_id):  # Don't send to sender
+                                    member_conn = self.chat1v1_handler.user_connections.get(member_id)
+                                    if member_conn:
+                                        _, member_writer = member_conn
+                                        try:
+                                            # Send with length prefix like client expects
+                                            message_json = json.dumps(push_message)
+                                            message_bytes = message_json.encode('utf-8')
+                                            length_prefix = len(message_bytes).to_bytes(4, 'big')
+                                            
+                                            member_writer.write(length_prefix + message_bytes)
+                                            await member_writer.drain()
+                                            print(f"[DEBUG] Pushed group message to member {member_id}")
+                                        except Exception as e:
+                                            print(f"⚠️ Failed to push group message to {member_id}: {e}")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to push group message: {e}")
 
             elif action == "join_group":
                 group_id = data["data"]["group_id"]

@@ -16,6 +16,7 @@ class GroupChatLogic:
         self.current_group = None
         self.message_offset = 0
         self.loading_lock = asyncio.Lock()  # Prevent concurrent loading
+        self._realtime_connected = False
 
         # Debug log để kiểm tra thông tin user
         print(f"[DEBUG] GroupChatLogic init: user_id={user_id}, username='{username}'")
@@ -23,6 +24,54 @@ class GroupChatLogic:
         # Kết nối tín hiệu từ UI
         self.ui.group_selected.connect(self.handle_group_selected)
         self.ui.message_send_requested.connect(self.send_message)
+        
+        # Connect real-time group message signals
+        self._connect_realtime_signals()
+        
+    def _connect_realtime_signals(self):
+        """Connect real-time group message signals from server"""
+        if not self._realtime_connected and hasattr(self.api_client, 'connection'):
+            try:
+                # Connect to new group message signal
+                self.api_client.connection.new_group_message_received.connect(self._on_realtime_group_message)
+                self._realtime_connected = True
+                print(f"[DEBUG][GroupChatLogic] Real-time signals connected for user_id={self.user_id}")
+            except Exception as e:
+                print(f"[ERROR][GroupChatLogic] Failed to connect real-time signals: {e}")
+    
+    def _on_realtime_group_message(self, message_data):
+        """Handle real-time group message from server"""
+        try:
+            print(f"[DEBUG][GroupChatLogic] Real-time group message received: {message_data}")
+            
+            # Check if message is for current group
+            group_id = str(message_data.get('group_id', ''))
+            current_group_id = str(self.current_group.get('group_id', '')) if self.current_group else ''
+            
+            if group_id == current_group_id:
+                # Check if message is from another user (not current user)
+                sender_id = str(message_data.get('user_id', ''))
+                current_user_id = str(self.user_id)
+                
+                if sender_id != current_user_id:
+                    # Add message to UI immediately
+                    content = message_data.get('message', '')
+                    timestamp = message_data.get('timestamp', '')
+                    sender_name = message_data.get('username', 'Unknown')
+                    
+                    print(f"[DEBUG][GroupChatLogic] Adding real-time group message to UI: {content}")
+                    
+                    # Add to UI as message from another user (show sender name in group)
+                    self.ui.add_message(content, False, timestamp, sender_name, show_sender_name=True)
+                else:
+                    print(f"[DEBUG][GroupChatLogic] Ignoring own message from real-time: {content}")
+            else:
+                print(f"[DEBUG][GroupChatLogic] Message not for current group: group_id={group_id}, current={current_group_id}")
+                
+        except Exception as e:
+            print(f"[ERROR][GroupChatLogic] Failed to handle real-time group message: {e}")
+            import traceback
+            traceback.print_exc()
 
     # ---------------------------
     # Load danh sách nhóm
