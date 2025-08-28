@@ -1,6 +1,7 @@
 import logging
 import sys
 import os
+import asyncio
 from typing import Optional, Dict
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import pyqtSignal, QTimer, QPropertyAnimation
@@ -16,6 +17,7 @@ from .status_thread import StatusUpdateThread
 from .settings_manager import SettingsManager
 from .notification_manager import NotificationManager
 from .animation_helper import AnimationHelper
+from client.Login.logout import LogoutHandler
 # Group chat
 logger = logging.getLogger(__name__)
 # Ensure root path for database imports
@@ -785,23 +787,62 @@ class Ui_MainWindow(QtCore.QObject):
             self.groups_list.addItem(f"Lỗi tải nhóm: {e}")
     
     def on_logout_clicked(self):
-        """Handle logout button click"""
+        """Handle logout button click with confirmation"""
         try:
+            # Hiển thị confirmation dialog
+            reply = QtWidgets.QMessageBox.question(
+                self.main_window,
+                "Xác nhận đăng xuất",
+                "Bạn có chắc chắn muốn đăng xuất?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No
+            )
+            
+            # Nếu user chọn No, không làm gì cả
+            if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
+            
+            # Nếu user chọn Yes, thực hiện đăng xuất
             if not self.client:
                 QtWidgets.QMessageBox.information(
                     self.main_window, 
                     "Đăng xuất", 
                     "Demo logout - chưa kết nối client thực tế."
                 )
+                self._logout_and_show_login()
                 return
+                
             self.logout_handler = LogoutHandler(self.client, self.main_window)
-            self.logout_handler.logout(self.username)
+            # Gọi async logout
+            asyncio.create_task(self.logout_handler.logout(self.username))
+            
         except Exception as e:
             logger.error(f"[Ui_MainWindow] Lỗi đăng xuất: {e}")
             QtWidgets.QMessageBox.critical(
                 self.main_window,
                 "Lỗi đăng xuất",
                 f"Có lỗi xảy ra khi đăng xuất: {str(e)}"
+            )
+    
+    def _logout_and_show_login(self):
+        """Chuyển về trang đăng nhập"""
+        try:
+            # Import ở đây để tránh circular import
+            from client.Login.login_signIn import LoginWindow
+            
+            # Tạo và hiện trang đăng nhập
+            self.login_window = LoginWindow()
+            self.login_window.show()
+            
+            # Đóng cửa sổ hiện tại
+            self.main_window.close()
+            
+        except Exception as e:
+            logger.error(f"[Ui_MainWindow] Lỗi chuyển về trang đăng nhập: {e}")
+            QtWidgets.QMessageBox.critical(
+                self.main_window,
+                "Lỗi",
+                f"Không thể chuyển về trang đăng nhập: {str(e)}"
             )
     
     def on_group_chat_clicked(self):
