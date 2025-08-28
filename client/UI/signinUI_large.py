@@ -170,7 +170,8 @@ class Ui_SignInWindow(object):
         self.txtPasswordSignin.setPlaceholderText(_translate("MainWindow", "Password"))
         self.txtConfirmPassword.setPlaceholderText(_translate("MainWindow", "Confirm Password"))
         self.btnSignin.setText(_translate("MainWindow", "CREATE ACCOUNT"))
-        self.backToLogin.setText(_translate("MainWindow", "Back to Login"))
+        self.lblHaveAccount.setText(_translate("MainWindow", "Đã có tài khoản?"))
+        self.lblBackToLogin.setText(_translate("MainWindow", '<a href="#" style="color:#ff9800; font-weight:bold; text-decoration:none;">Đăng nhập ngay</a>'))
 
 if __name__ == "__main__":
     import sys

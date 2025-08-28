@@ -18,6 +18,9 @@ class LoginWindow(QtWidgets.QMainWindow):
 
         # Kết nối nút login (async)
         self.ui.btnLogin.clicked.connect(lambda: asyncio.create_task(self.handle_login()))
+        
+        # Kết nối nút đăng ký
+        self.ui.register_callback = self.open_register_window
 
     # Không cần creatAccount nữa, đã có link đăng ký ở giao diện mới
     
@@ -81,7 +84,9 @@ class RegisterWindow(QtWidgets.QMainWindow):
         self.client = AsyncPycTalkClient()
 
         self.ui.btnSignin.clicked.connect(lambda: asyncio.create_task(self.handle_register()))
-        self.ui.backToLogin.clicked.connect(self.back_to_login_clicked)
+        
+        # Kết nối callback cho nút "Back to Login"
+        self.ui.login_callback = self.back_to_login_clicked
 
     async def handle_register(self):
         username = self.ui.txtUsernameSignin.text()
@@ -121,21 +126,19 @@ class RegisterWindow(QtWidgets.QMainWindow):
                 "email": email
             }
         }
-        await self.client.send_json(request)
 
         async def register_callback(response):
             if response and response.get("success"):
                 print("✅ Đăng ký thành công.")
-                QtWidgets.QMessageBox.information(self, "Thành công", "Đăng ký tài khoản thành công!")
-                self.login_window = LoginWindow()
-                self.login_window.show()
-                self.close()
+                QtWidgets.QMessageBox.information(self, "Thành công", "Đăng ký tài khoản thành công!\nBạn có thể đăng nhập ngay bây giờ.")
+                await self.client.disconnect()
+                self.back_to_login_clicked()
             else:
                 await self.client.disconnect()
                 error_message = response.get("message", "Đăng ký thất bại") if response else "Không nhận được phản hồi từ server"
                 QMessageBox.warning(self, "Thất bại", error_message)
 
-        asyncio.create_task(self.client.listen_loop(register_callback))
+        await self.client.send_json(request, register_callback)
             
     def back_to_login_clicked(self):
         self.open_login_window()
