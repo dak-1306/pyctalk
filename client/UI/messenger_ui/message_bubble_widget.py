@@ -2,20 +2,23 @@ import datetime
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
+from .time_formatter import TimeFormatter
 
 
 class MessageBubble(QtWidgets.QWidget):
     """Modern message bubble component for chat"""
     sender_clicked = pyqtSignal(str)  # Signal when sender name is clicked
     
-    def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, parent=None):
+    def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, show_timestamp=False, parent=None):
         super().__init__(parent)
         self.message = message
         self.is_sent = is_sent
         self.timestamp = timestamp or datetime.datetime.now()
         self.sender_name = sender_name
         self.show_sender_name = show_sender_name
-        print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}, sender_name={sender_name}, show_sender_name={show_sender_name}")
+        self.show_timestamp = show_timestamp  # New parameter to control timestamp display
+        self.timestamp_label = None  # Reference to timestamp label for click events
+        print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}, sender_name={sender_name}, show_sender_name={show_sender_name}, show_timestamp={show_timestamp}")
         self._setup_ui()
         
         # Force set size và visibility
@@ -117,6 +120,32 @@ class MessageBubble(QtWidgets.QWidget):
         
         main_layout.addLayout(bubble_layout)
         
+        # Hiển thị timestamp nếu cần
+        if self.show_timestamp:
+            timestamp_str = TimeFormatter.format_message_time(self.timestamp, show_time=True)
+            if timestamp_str:
+                self.timestamp_label = QtWidgets.QLabel(timestamp_str)
+                self.timestamp_label.setStyleSheet("""
+                    QLabel {
+                        color: #8E8E93;
+                        font-size: 11px;
+                        margin: 2px 0;
+                    }
+                    QLabel:hover {
+                        color: #007AFF;
+                    }
+                """)
+                
+                # Align timestamp based on message direction
+                if self.is_sent:
+                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+                else:
+                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                
+                # Make timestamp clickable to toggle visibility
+                self.timestamp_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+                main_layout.addWidget(self.timestamp_label)
+        
         # Force properties
         bubble.setVisible(True)
         bubble.show()
@@ -150,7 +179,30 @@ class MessageBubble(QtWidgets.QWidget):
                 break
     
     def get_timestamp_str(self):
-        """Get formatted timestamp string"""
-        if hasattr(self.timestamp, 'strftime'):
-            return self.timestamp.strftime("%H:%M")
-        return str(self.timestamp)
+        """Get formatted timestamp string using TimeFormatter"""
+        return TimeFormatter.format_message_time(self.timestamp, show_time=True)
+    
+    def toggle_timestamp_visibility(self):
+        """Toggle timestamp visibility when bubble is clicked"""
+        if self.timestamp_label:
+            self.timestamp_label.setVisible(not self.timestamp_label.isVisible())
+        elif not self.show_timestamp:
+            # Create and show timestamp if not already shown
+            timestamp_str = self.get_timestamp_str()
+            if timestamp_str:
+                self.timestamp_label = QtWidgets.QLabel(timestamp_str)
+                self.timestamp_label.setStyleSheet("""
+                    QLabel {
+                        color: #8E8E93;
+                        font-size: 11px;
+                        margin: 2px 0;
+                    }
+                """)
+                
+                if self.is_sent:
+                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+                else:
+                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                
+                self.layout().addWidget(self.timestamp_label)
+                self.show_timestamp = True

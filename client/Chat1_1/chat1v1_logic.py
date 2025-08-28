@@ -7,9 +7,13 @@ class Chat1v1Logic:
         self.current_user_id = current_user_id
         self.friend_id = friend_id
         self._signal_connected = False
+        self._realtime_connected = False
 
         # kết nối signal UI → logic
         self._connect_signals()
+        
+        # Connect real-time message signals
+        self._connect_realtime_signals()
         
     def _connect_signals(self):
         """Connect UI signals to logic"""
@@ -19,6 +23,58 @@ class Chat1v1Logic:
             )
             self._signal_connected = True
             print(f"[DEBUG][Chat1v1Logic] Signal connected for friend_id={self.friend_id}")
+            
+    def _connect_realtime_signals(self):
+        """Connect real-time message signals from server"""
+        if not self._realtime_connected and hasattr(self.api_client, 'client'):
+            try:
+                # Connect to new message signal
+                self.api_client.client.new_message_received.connect(self._on_realtime_message)
+                self._realtime_connected = True
+                print(f"[DEBUG][Chat1v1Logic] Real-time signals connected for friend_id={self.friend_id}")
+            except Exception as e:
+                print(f"[ERROR][Chat1v1Logic] Failed to connect real-time signals: {e}")
+    
+    def _on_realtime_message(self, message_data):
+        """Handle real-time message from server"""
+        try:
+            print(f"[DEBUG][Chat1v1Logic] Real-time message received: {message_data}")
+            
+            # Check if message is for this chat
+            from_user = str(message_data.get('from', ''))
+            to_user = str(message_data.get('to', ''))
+            current_user_str = str(self.current_user_id)
+            friend_str = str(self.friend_id)
+            
+            # Message is relevant if it's between current user and this friend
+            is_relevant = ((from_user == current_user_str and to_user == friend_str) or 
+                          (from_user == friend_str and to_user == current_user_str))
+            
+            # Only add message from others, not own messages (to avoid duplicates)
+            is_from_other = str(from_user) != str(self.current_user_id)
+            
+            if is_relevant and is_from_other:
+                # Add message to UI immediately
+                content = message_data.get('message', '')
+                timestamp = message_data.get('timestamp', '')
+                sender_id = message_data.get('from', '')
+                
+                print(f"[DEBUG][Chat1v1Logic] Adding real-time message from friend to UI: {content}")
+                
+                # Message is from friend
+                sender_name = message_data.get('sender_name', 'Friend')
+                
+                # Correct parameter order: (message, is_sent, timestamp, sender_name)
+                self.ui.add_message(content, False, timestamp, sender_name)
+            elif is_relevant and not is_from_other:
+                print(f"[DEBUG][Chat1v1Logic] Ignoring own message to avoid duplicate: {message_data.get('message', '')}")
+            else:
+                print(f"[DEBUG][Chat1v1Logic] Message not relevant for this chat: from={from_user}, to={to_user}")
+                
+        except Exception as e:
+            print(f"[ERROR][Chat1v1Logic] Failed to handle real-time message: {e}")
+            import traceback
+            traceback.print_exc()
         
     def reconnect_ui_signals(self):
         """Reconnect UI signals when reusing cached chat window"""
@@ -30,8 +86,18 @@ class Chat1v1Logic:
         except:
             pass  # Không có connection cũ
             
-        # Reconnect
+        # Disconnect real-time signals
+        try:
+            if hasattr(self.api_client, 'client'):
+                self.api_client.client.new_message_received.disconnect(self._on_realtime_message)
+                self._realtime_connected = False
+                print(f"[DEBUG][Chat1v1Logic] Disconnected old real-time signals for friend_id={self.friend_id}")
+        except:
+            pass
+            
+        # Reconnect both
         self._connect_signals()
+        self._connect_realtime_signals()
 
     async def load_message_history(self):
         try:

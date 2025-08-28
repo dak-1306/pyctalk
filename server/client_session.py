@@ -13,7 +13,11 @@ class ClientSession:
         self.client_address = client_address
         self.running = True
         self.group_handler = GroupHandler()
-        self.last_ping_time = time.time()        # Friend handler
+        self.last_ping_time = time.time()
+        
+        # User login info
+        self.logged_in_username = None
+        self.logged_in_user_id = None        # Friend handler
         try:
             from Handle_AddFriend.friend_handle import friend_handler
             self.friend_handler = friend_handler
@@ -81,6 +85,11 @@ class ClientSession:
 
     async def cleanup(self):
         try:
+            # Unregister from chat handler if logged in
+            if self.chat1v1_handler and self.logged_in_username:
+                self.chat1v1_handler.unregister_user_connection(self.logged_in_username, self.logged_in_user_id)
+                print(f"[Chat1v1] Unregistered {self.logged_in_username} on cleanup")
+                
             self.writer.close()
             await self.writer.wait_closed()
             print(f"🔌 Đã đóng kết nối với {self.client_address}")
@@ -123,8 +132,14 @@ class ClientSession:
 
                 if result and result.get("success") and self.chat1v1_handler:
                     try:
-                        self.chat1v1_handler.register_user_connection(username, self.writer)
-                        print(f"[Chat1v1] Registered real-time connection for {username}")
+                        user_id = result.get("user_id")
+                        # Save login info
+                        self.logged_in_username = username
+                        self.logged_in_user_id = str(user_id)
+                        
+                        # Register with both username and user_id for connection lookup
+                        self.chat1v1_handler.register_user_connection(username, str(user_id), self.writer)
+                        print(f"[Chat1v1] Registered real-time connection for {username} (ID: {user_id})")
                     except Exception as e:
                         print(f"[Chat1v1] Failed to register connection for {username}: {e}")
 
@@ -137,8 +152,8 @@ class ClientSession:
                 self.running = False
 
             elif action == "logout":
-                if self.chat1v1_handler:
-                    self.chat1v1_handler.unregister_user_connection(self.client_address)
+                if self.chat1v1_handler and self.logged_in_username:
+                    self.chat1v1_handler.unregister_user_connection(self.logged_in_username, self.logged_in_user_id)
                 await self.send_response({"success": True, "message": "Đăng xuất thành công."}, request_id)
                 self.running = False
 

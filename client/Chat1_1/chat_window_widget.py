@@ -5,6 +5,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from UI.messenger_ui.message_bubble_widget import MessageBubble
+from UI.messenger_ui.time_formatter import TimeFormatter
 
 class ChatWindow(QtWidgets.QWidget):
     def showEvent(self, event):
@@ -31,6 +32,12 @@ class ChatWindow(QtWidgets.QWidget):
             'last_message': kwargs.get('last_message', ''),
             'unread_count': kwargs.get('unread_count', 0)
         }
+        
+        # Track previous message for timestamp logic
+        self.last_message_time = None
+        self.last_message_sender = None
+        self.message_count = 0
+        
         self._setup_ui()
 
     def _setup_ui(self):
@@ -108,11 +115,41 @@ class ChatWindow(QtWidgets.QWidget):
         else:
             print(f"[DEBUG][ChatWindow] Empty text, not sending")
 
-    def add_message(self, message, is_sent, timestamp=None):
+    def add_message(self, message, is_sent, timestamp=None, sender_name=None):
         print(f"[DEBUG][ChatWindow] add_message: message={message}, is_sent={is_sent}, timestamp={timestamp}")
         try:
-            bubble = MessageBubble(message, is_sent, timestamp)
+            # Determine current sender
+            current_sender = self.chat_data.get('current_username', 'You') if is_sent else self.chat_data.get('friend_name', 'Friend')
+            if sender_name:
+                current_sender = sender_name
+            
+            # Determine if timestamp should be shown based on Messenger logic
+            is_first_message = self.message_count == 0
+            show_timestamp = TimeFormatter.should_show_timestamp(
+                timestamp, 
+                self.last_message_time, 
+                current_sender, 
+                self.last_message_sender,
+                is_first_message
+            )
+            
+            print(f"[DEBUG][ChatWindow] Timestamp logic: show_timestamp={show_timestamp}, is_first={is_first_message}, current_sender={current_sender}, prev_sender={self.last_message_sender}")
+            
+            # Create message bubble with timestamp logic
+            bubble = MessageBubble(
+                message=message, 
+                is_sent=is_sent, 
+                timestamp=timestamp,
+                sender_name=current_sender,
+                show_sender_name=False,  # For 1-1 chat, don't show sender name
+                show_timestamp=show_timestamp
+            )
             print(f"[DEBUG][ChatWindow] Created MessageBubble: {bubble}")
+            
+            # Update tracking variables
+            self.last_message_time = timestamp
+            self.last_message_sender = current_sender
+            self.message_count += 1
             
             # Kiểm tra layout count trước khi insert
             count_before = self.messages_layout.count()
@@ -241,7 +278,24 @@ class ChatWindow(QtWidgets.QWidget):
                     print(f"[DEBUG][ChatWindow] Force showing bubble: {widget.message}")
                     widget.setVisible(True)
                     widget.show()
-                    widget.repaint()
+    
+    def clear_messages(self):
+        """Clear all messages and reset tracking variables"""
+        print(f"[DEBUG][ChatWindow] Clearing all messages")
+        
+        # Remove all widgets from layout
+        while self.messages_layout.count():
+            child = self.messages_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # Reset tracking variables
+        self.last_message_time = None
+        self.last_message_sender = None
+        self.message_count = 0
+        
+        print(f"[DEBUG][ChatWindow] Messages cleared, tracking reset")
+        widget.repaint()
         
         # Force updates of parent widgets too
         self.messages_widget.show()

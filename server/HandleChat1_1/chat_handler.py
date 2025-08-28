@@ -72,19 +72,23 @@ class Chat1v1Handler:
             except Exception as db_exc:
                 print(f"❌ Lỗi lưu tin nhắn vào DB: {db_exc}")
 
-            # Send to recipient if online
+            # Send push message to recipient if online (not sender to avoid duplicate)
             recipient_conn = self.user_connections.get(recipient)
             if recipient_conn:
                 _, recipient_writer = recipient_conn
                 try:
-                    response = {
-                        "action": "receive_message",
+                    push_message = {
+                        "action": "new_message", 
                         "data": message_obj,
                     }
-                    recipient_writer.write(
-                        (json.dumps(response) + "\n").encode("utf-8")
-                    )
+                    # Gửi với length prefix như client expect
+                    message_json = json.dumps(push_message)
+                    message_bytes = message_json.encode('utf-8')
+                    length_prefix = len(message_bytes).to_bytes(4, 'big')
+                    
+                    recipient_writer.write(length_prefix + message_bytes)
                     await recipient_writer.drain()
+                    print(f"[DEBUG] Pushed message to recipient {recipient}")
                 except Exception as e:
                     print(f"⚠️ Failed to send message to {recipient}: {e}")
 
@@ -159,12 +163,14 @@ class Chat1v1Handler:
         except Exception as e:
             return {"success": False, "message": f"Error marking as read: {str(e)}"}
 
-    def register_user_connection(self, username: str, writer):
-        """Register user connection"""
-        self.user_connections[username] = (None, writer)
-        print(f"✅ User {username} connected for chat")
+    def register_user_connection(self, username: str, user_id: str, writer):
+        """Register user connection with both username and user_id"""
+        connection_data = (None, writer)
+        self.user_connections[username] = connection_data
+        self.user_connections[str(user_id)] = connection_data  # Also store by user_id
+        print(f"✅ User {username} (ID: {user_id}) connected for chat")
 
-    def unregister_user_connection(self, username: str):
+    def unregister_user_connection(self, username: str, user_id: str = None):
         """Unregister user connection"""
         if username in self.user_connections:
             _, writer = self.user_connections[username]
@@ -174,7 +180,12 @@ class Chat1v1Handler:
             except Exception:
                 pass
             del self.user_connections[username]
-            print(f"❌ User {username} disconnected from chat")
+            
+            # Also remove by user_id if provided
+            if user_id and str(user_id) in self.user_connections:
+                del self.user_connections[str(user_id)]
+                
+            print(f"❌ User {username} (ID: {user_id}) disconnected from chat")
 
     def get_online_users(self):
         """Get list of currently online users"""

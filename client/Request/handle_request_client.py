@@ -1,8 +1,12 @@
 import asyncio
 import json
+from PyQt6.QtCore import QObject, pyqtSignal
 
 
-class AsyncPycTalkClient:
+class AsyncPycTalkClient(QObject):
+    # Signals for real-time events
+    new_message_received = pyqtSignal(dict)  # Emit when new message received
+    user_status_changed = pyqtSignal(str, str)  # Emit when user status changes
     async def send_request(self, action, data):
         """
         Chuẩn hóa API cho chat 1-1: get_chat_history, send_message
@@ -37,6 +41,7 @@ class AsyncPycTalkClient:
             }
         return await self.send_json(request)
     def __init__(self, server_host='127.0.0.1', server_port=9000):
+        super().__init__()  # Initialize QObject
         self._io_lock = asyncio.Lock()
         self.server_host = server_host
         self.server_port = server_port
@@ -165,6 +170,7 @@ class AsyncPycTalkClient:
                     # Lấy request ID từ response
                     request_id = response.get("_request_id")
                     if request_id and request_id in self._pending_requests:
+                        # Đây là response cho một request đã gửi
                         print(f"[DEBUG] Found callback for request ID: {request_id}")
                         callback = self._pending_requests.pop(request_id)
                         print(f"[DEBUG] Remaining pending requests: {len(self._pending_requests)}")
@@ -175,6 +181,10 @@ class AsyncPycTalkClient:
                             else:
                                 callback(response)
                             print(f"[DEBUG] Callback executed successfully for ID: {request_id}")
+                    elif not request_id:
+                        # Đây là message được server push (không phải response cho request)
+                        print(f"[DEBUG] Received pushed message from server: {response}")
+                        await self._handle_pushed_message(response)
                     else:
                         print(f"[WARNING] No callback found for request ID: {request_id}")
                         print(f"[DEBUG] Pending request IDs: {list(self._pending_requests.keys())}")
@@ -260,3 +270,32 @@ class AsyncPycTalkClient:
 
     def is_logged_in(self):
         return self.user_id is not None and self.username is not None
+
+    async def _handle_pushed_message(self, data):
+        """Handle server-pushed messages for real-time events"""
+        try:
+            if not isinstance(data, dict):
+                print(f"[DEBUG] Invalid pushed message format: {data}")
+                return
+                
+            action = data.get('action')
+            message_data = data.get('data', {})
+            
+            if action == 'new_message':
+                # Real-time message received
+                print(f"[DEBUG] New message pushed from server: {message_data}")
+                self.new_message_received.emit(message_data)
+                
+            elif action == 'user_status_change':
+                # User online/offline status change
+                user_id = message_data.get('user_id')
+                status = message_data.get('status')
+                if user_id and status:
+                    self.user_status_changed.emit(user_id, status)
+                    
+            else:
+                print(f"[DEBUG] Unknown pushed message action: {action}")
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to handle pushed message: {e}")
+            print(f"[ERROR] Data: {data}")
