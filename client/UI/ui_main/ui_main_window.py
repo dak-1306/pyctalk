@@ -102,9 +102,30 @@ class Ui_MainWindow(QtCore.QObject):
         # Expose sidebar attributes for compatibility
         self.tabWidget = self.sidebar.tabWidget
         self.groups_list = self.sidebar.groups_list
-    # self.btnGroupChat đã bị loại bỏ
+        # self.btnGroupChat đã bị loại bỏ
         self.btnSettings = self.sidebar.btnSettings
         self.outer_layout.addWidget(self.sidebar)
+
+    def _clean_invalid_widgets(self):
+        """Helper method to clean invalid widgets from cache"""
+        invalid_keys = []
+        for friend_id, (chat_window, api_client) in self.chat_windows_cache.items():
+            try:
+                # Test if widget is still valid
+                chat_window.isVisible()
+            except RuntimeError:
+                # Widget has been deleted, mark for removal
+                invalid_keys.append(friend_id)
+                print(f"[DEBUG][MainWindow] Found invalid cached widget for friend_id={friend_id}")
+        
+        # Remove invalid entries
+        for key in invalid_keys:
+            del self.chat_windows_cache[key]
+            print(f"[DEBUG][MainWindow] Cleaned invalid widget cache for friend_id={key}")
+        
+        if invalid_keys:
+            print(f"[DEBUG][MainWindow] Cleaned {len(invalid_keys)} invalid widgets from cache")
+
     def _open_chat_window_1v1(self, chat_data):
         """Open 1-1 chat window when a friend is selected"""
         from client.Chat1_1.chat_window_widget import ChatWindow
@@ -112,6 +133,9 @@ class Ui_MainWindow(QtCore.QObject):
         
         print(f"[DEBUG][MainWindow] _open_chat_window_1v1 called with chat_data={chat_data}")
         print(f"[DEBUG][MainWindow] self.user_id={self.user_id}")
+        
+        # Clean invalid widgets from cache first
+        self._clean_invalid_widgets()
         
         # Ensure current_user_id is set
         chat_data['current_user_id'] = chat_data.get('current_user_id', self.user_id)
@@ -133,36 +157,64 @@ class Ui_MainWindow(QtCore.QObject):
             print("[DEBUG][MainWindow] card_container đã bị xóa, bỏ qua")
             self.card_container = None
 
-        # Xóa tất cả widgets cũ trong main_layout (trừ topbar) để tránh đè lên nhau
+        # Ẩn và remove tất cả widgets cũ trong main_layout (trừ topbar) để tránh đè lên nhau
         widgets_to_remove = []
         for i in range(self.main_layout.count()):
             widget = self.main_layout.itemAt(i).widget()
-            # Giữ lại topbar, xóa các widget khác
+            # Giữ lại topbar, remove các widget khác
             if widget and getattr(widget, 'objectName', lambda: None)() != "topbar":
                 widgets_to_remove.append(widget)
         for widget in widgets_to_remove:
             self.main_layout.removeWidget(widget)
             widget.hide()
-            # Không dùng deleteLater() vì có thể cần dùng lại từ cache
+            # Đặt parent về None để widget không bị tự động xóa
+            widget.setParent(None)
         
         # Ẩn chat window hiện tại (nếu có)
         if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
-            current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
-            current_chat_window.hide()
-            # Không cần removeWidget nữa vì đã xóa ở trên
+            try:
+                current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
+                # Kiểm tra xem widget có còn tồn tại không bằng cách test một method
+                current_chat_window.isVisible()  # This will raise RuntimeError if deleted
+                current_chat_window.hide()
+                print(f"[DEBUG][MainWindow] Hidden current chat window for friend_id={self.current_chat_friend_id}")
+            except RuntimeError as e:
+                print(f"[DEBUG][MainWindow] Chat window already deleted: {e}")
+                # Widget đã bị xóa, xóa khỏi cache
+                del self.chat_windows_cache[self.current_chat_friend_id]
+                print(f"[DEBUG][MainWindow] Removed invalid chat window from cache for friend_id={self.current_chat_friend_id}")
+            except Exception as e:
+                print(f"[ERROR][MainWindow] Unexpected error with chat window: {e}")
+                del self.chat_windows_cache[self.current_chat_friend_id]
         
         # Kiểm tra cache, nếu đã có thì dùng lại
         if friend_id in self.chat_windows_cache:
-            chat_window, api_client = self.chat_windows_cache[friend_id]
-            # Sử dụng logic đã có trong cache và reconnect signals
-            chat_window.logic = api_client.logic
-            api_client.logic.reconnect_ui_signals()
-            self.main_layout.addWidget(chat_window)
-            chat_window.show()
-            # Force show all message bubbles when restoring from cache
-            if hasattr(chat_window, '_force_show_all_messages'):
-                chat_window._force_show_all_messages()
-        else:
+            try:
+                chat_window, api_client = self.chat_windows_cache[friend_id]
+                # Test widget validity
+                chat_window.isVisible()  # This will raise RuntimeError if deleted
+                
+                # Sử dụng logic đã có trong cache và reconnect signals
+                chat_window.logic = api_client.logic
+                api_client.logic.reconnect_ui_signals()
+                # Set parent lại trước khi add vào layout
+                chat_window.setParent(self.central_widget)
+                self.main_layout.addWidget(chat_window)
+                chat_window.show()
+                # Force show all message bubbles when restoring from cache
+                if hasattr(chat_window, '_force_show_all_messages'):
+                    chat_window._force_show_all_messages()
+                print(f"[DEBUG][MainWindow] Reused cached chat window for friend_id={friend_id}")
+                return  # Successfully reused cached window
+            except RuntimeError as e:
+                print(f"[ERROR][MainWindow] Cached chat window invalid: {e}")
+                # Xóa khỏi cache và tạo mới
+                if friend_id in self.chat_windows_cache:
+                    del self.chat_windows_cache[friend_id]
+                # Create new window by falling through to else block
+        
+        # Tạo mới chat window nếu không có trong cache hoặc cache invalid
+        if friend_id not in self.chat_windows_cache:
             # Tạo mới chat window và cache lại
             chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
             # Debug: Check values before creating Chat1v1Client
@@ -1119,6 +1171,9 @@ class Ui_MainWindow(QtCore.QObject):
     
     def on_group_double_clicked(self, group_data):
         """Khi click vào nhóm, chỉ còn khung chat nhóm, khung welcome phải biến mất hoàn toàn"""
+        # Clean invalid widgets from cache first
+        self._clean_invalid_widgets()
+        
         # Chỉ log khi chuyển nhóm
         logger.info(f"[Ui_MainWindow] Chuyển sang nhóm: {group_data.get('group_name')} (ID: {group_data.get('group_id')})")
         widgets_to_remove = []
@@ -1129,8 +1184,12 @@ class Ui_MainWindow(QtCore.QObject):
                 widgets_to_remove.append(widget)
         for widget in widgets_to_remove:
             self.main_layout.removeWidget(widget)
-            widget.hide()
-            widget.deleteLater()
+            try:
+                widget.hide()
+                widget.deleteLater()
+            except RuntimeError:
+                # Widget already deleted, ignore
+                pass
         
         # Xóa tham chiếu đến các widget đã bị xóa
         self.status_message = None

@@ -25,3 +25,22 @@ class Chat1v1APIClient:
             import traceback
             traceback.print_exc()
             return None
+
+    async def mark_message_as_read(self, friend_id, current_user_id=None):
+        """Mark messages from friend as read"""
+        try:
+            # Use provided current_user_id or try to get from client
+            user_id = current_user_id or getattr(self.client, 'current_user_id', None)
+            if not user_id:
+                print(f"[ERROR][Chat1v1APIClient] Current user ID not found")
+                return None
+                
+            response = await self.client.send_request("mark_as_read", {
+                "user_id": user_id,      # Who is reading the messages
+                "sender_id": friend_id   # Who sent the messages
+            })
+            print(f"[DEBUG][Chat1v1APIClient] mark_message_as_read response: {response}")
+            return response
+        except Exception as e:
+            print(f"[ERROR][Chat1v1APIClient] mark_message_as_read error: {e}")
+            return None

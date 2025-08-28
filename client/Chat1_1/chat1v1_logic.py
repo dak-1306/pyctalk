@@ -1,7 +1,14 @@
 import asyncio
-class Chat1v1Logic:
+from PyQt6.QtCore import QObject, pyqtSignal
+
+class Chat1v1Logic(QObject):
     """Logic xử lý tin nhắn, kết nối API với UI"""
+    
+    # Signal for when messages are marked as read
+    messages_read = pyqtSignal(dict)
+    
     def __init__(self, ui_window, api_client, current_user_id, friend_id):
+        super().__init__()
         self.ui = ui_window
         self.api_client = api_client
         self.current_user_id = current_user_id
@@ -30,6 +37,8 @@ class Chat1v1Logic:
             try:
                 # Connect to new message signal
                 self.api_client.client.new_message_received.connect(self._on_realtime_message)
+                # Connect to messages read signal
+                self.api_client.client.messages_read.connect(self._on_messages_read)
                 self._realtime_connected = True
                 print(f"[DEBUG][Chat1v1Logic] Real-time signals connected for friend_id={self.friend_id}")
             except Exception as e:
@@ -66,6 +75,13 @@ class Chat1v1Logic:
                 
                 # Correct parameter order: (message, is_sent, timestamp, sender_name)
                 self.ui.add_message(content, False, timestamp, sender_name)
+                
+                # Mark this new message as read since user has chat window open
+                # Use asyncio to run the async function
+                import asyncio
+                asyncio.create_task(self.api_client.mark_message_as_read(self.friend_id, self.current_user_id))
+                print(f"[DEBUG][Chat1v1Logic] Scheduled mark as read for friend {self.friend_id}")
+                
             elif is_relevant and not is_from_other:
                 print(f"[DEBUG][Chat1v1Logic] Ignoring own message to avoid duplicate: {message_data.get('message', '')}")
             else:
@@ -90,6 +106,7 @@ class Chat1v1Logic:
         try:
             if hasattr(self.api_client, 'client'):
                 self.api_client.client.new_message_received.disconnect(self._on_realtime_message)
+                self.api_client.client.messages_read.disconnect(self._on_messages_read)
                 self._realtime_connected = False
                 print(f"[DEBUG][Chat1v1Logic] Disconnected old real-time signals for friend_id={self.friend_id}")
         except:
@@ -122,8 +139,23 @@ class Chat1v1Logic:
                     sender_id = int(m.get("user_id") or m.get("from"))
                     content = m.get("message", "")
                     timestamp = m.get("timestamp", None)
-                    print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}")
-                    self.ui.add_message(content, sender_id == self.current_user_id, timestamp)
+                    is_read = m.get("is_read", None)  # Get read status from server
+                    print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}, is_read={is_read}")
+                    
+                    # For sent messages, pass read status; for received messages, don't show status
+                    message_is_read = is_read if sender_id == self.current_user_id else None
+                    self.ui.add_message(content, sender_id == self.current_user_id, timestamp, None, message_is_read)
+            
+            # Only mark messages as read if there are unread messages from friend
+            # This will trigger the real-time "messages_read" notification
+            has_unread_from_friend = any(
+                not m.get("is_read", False) and int(m.get("user_id") or m.get("from")) == self.friend_id 
+                for m in messages
+            )
+            if has_unread_from_friend:
+                await self.api_client.mark_message_as_read(self.friend_id, self.current_user_id)
+                print(f"[DEBUG][Chat1v1Logic] Marked unread messages from friend {self.friend_id} as read")
+                    
         except Exception as e:
             print("[ERROR] load_message_history:", e)
 
@@ -143,8 +175,9 @@ class Chat1v1Logic:
                 timestamp = None
                 if 'data' in resp and 'timestamp' in resp['data']:
                     timestamp = resp['data']['timestamp']
-                self.ui.add_message(text, True, timestamp)
-                print(f"[DEBUG][Chat1v1Logic] Message added to UI successfully")
+                # Add message with "sent" status (False = sent but not read)
+                self.ui.add_message(text, True, timestamp, None, False)
+                print(f"[DEBUG][Chat1v1Logic] Message added to UI successfully with 'sent' status")
             else:
                 print(f"[ERROR][Chat1v1Logic] Send message failed: {resp}")
         except asyncio.TimeoutError:
@@ -161,3 +194,21 @@ class Chat1v1Logic:
         timestamp = data.get("timestamp", None)
         if sender == self.friend_id:
             self.ui.add_message(message, False, timestamp)
+
+    def _on_messages_read(self, read_data):
+        """Handle when messages are marked as read"""
+        try:
+            print(f"[DEBUG][Chat1v1Logic] Received messages read notification: {read_data}")
+            
+            # Check if read notification is for this chat
+            reader_id = read_data.get('reader_id')
+            sender_id = read_data.get('sender_id') 
+            
+            # If friend read our messages, update UI to show "Đã xem"
+            if (reader_id == self.friend_id and sender_id == self.current_user_id):
+                print(f"[DEBUG][Chat1v1Logic] Friend {self.friend_id} read our messages")
+                # Update all unread messages from us to show as read
+                self.ui.update_messages_read_status()
+                
+        except Exception as e:
+            print(f"[ERROR][Chat1v1Logic] Error handling messages read: {e}")

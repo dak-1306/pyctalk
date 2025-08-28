@@ -10,7 +10,7 @@ class MessageBubble(QtWidgets.QWidget):
     sender_clicked = pyqtSignal(str)  # Signal when sender name is clicked
     timestamp_clicked = pyqtSignal(str)  # Signal when timestamp is clicked
     
-    def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, show_timestamp=False, parent=None):
+    def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, show_timestamp=False, is_read=None, parent=None):
         super().__init__(parent)
         self.message = message
         self.is_sent = is_sent
@@ -18,6 +18,7 @@ class MessageBubble(QtWidgets.QWidget):
         self.sender_name = sender_name
         self.show_sender_name = show_sender_name
         self.show_timestamp = show_timestamp  # New parameter to control timestamp display
+        self.is_read = is_read  # Message read status (for sent messages)
         self.timestamp_label = None  # Reference to timestamp label for click events
         print(f"[DEBUG][MessageBubble] Creating bubble: message='{message}', is_sent={is_sent}, sender_name={sender_name}, show_sender_name={show_sender_name}, show_timestamp={show_timestamp}")
         self._setup_ui()
@@ -32,16 +33,8 @@ class MessageBubble(QtWidgets.QWidget):
         print(f"[DEBUG][MessageBubble] Bubble setup completed, size={self.size()}, visible={self.isVisible()}")
     
     def setVisible(self, visible):
-        print(f"[DEBUG][MessageBubble] setVisible called with: {visible} for message: '{self.message}'")
-        import traceback
-        if not visible:
-            print(f"[DEBUG][MessageBubble] HIDE CALL STACK:")
-            traceback.print_stack()
-            # Only prevent hiding during initial layout operations
-            # Allow hiding if this is part of normal UI operations
-            print(f"[DEBUG][MessageBubble] Allowing hide for layout operations")
+        # Only allow hiding during layout operations, preserve message bubbles
         super().setVisible(visible)
-        print(f"[DEBUG][MessageBubble] setVisible result: {self.isVisible()}")
     
     def hide(self):
         print(f"[DEBUG][MessageBubble] hide() called for message: '{self.message}' - ALLOWING")
@@ -154,6 +147,10 @@ class MessageBubble(QtWidgets.QWidget):
                 self.timestamp_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
                 main_layout.addWidget(self.timestamp_label)
         
+        # Add message status indicator for sent messages
+        if self.is_sent:
+            self._add_status_indicator(main_layout)
+        
         # Force properties
         bubble.setVisible(True)
         bubble.show()
@@ -176,6 +173,74 @@ class MessageBubble(QtWidgets.QWidget):
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setText("F")
         return avatar
+    
+    def _add_status_indicator(self, main_layout):
+        """Add message status indicator for sent messages"""
+        if self.is_read is None:
+            # Status unknown, show "Sent"
+            status_text = "Đã gửi"
+            status_icon = "✓"
+            status_color = "#8E8E93"
+        elif self.is_read:
+            # Message has been read
+            status_text = "Đã xem"
+            status_icon = "✓✓"
+            status_color = "#007AFF"
+        else:
+            # Message sent but not read
+            status_text = "Đã gửi"
+            status_icon = "✓"
+            status_color = "#8E8E93"
+        
+        # Create status indicator
+        self.status_label = QtWidgets.QLabel(f"{status_icon} {status_text}")
+        self.status_label.setStyleSheet(f"""
+            QLabel {{
+                color: {status_color};
+                font-size: 10px;
+                margin: 2px 0;
+                padding: 0;
+            }}
+        """)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        main_layout.addWidget(self.status_label)
+    
+    def update_read_status(self, is_read):
+        """Update the read status of the message"""
+        self.is_read = is_read
+        if hasattr(self, 'status_label') and self.status_label:
+            if is_read:
+                self.status_label.setText("✓✓ Đã xem")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        color: #007AFF;
+                        font-size: 10px;
+                        margin: 2px 0;
+                        padding: 0;
+                    }
+                """)
+            else:
+                self.status_label.setText("✓ Đã gửi")
+                self.status_label.setStyleSheet("""
+                    QLabel {
+                        color: #8E8E93;
+                        font-size: 10px;
+                        margin: 2px 0;
+                        padding: 0;
+                    }
+                """)
+    
+    def hide_status_indicator(self):
+        """Hide the status indicator for this message"""
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.hide()
+            print(f"[DEBUG][MessageBubble] Hidden status indicator for message: {self.message[:20]}...")
+    
+    def show_status_indicator(self):
+        """Show the status indicator for this message"""
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.show()
+            print(f"[DEBUG][MessageBubble] Shown status indicator for message: {self.message[:20]}...")
     
     def update_message(self, new_message):
         """Update message content"""

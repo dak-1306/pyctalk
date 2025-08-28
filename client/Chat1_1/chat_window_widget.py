@@ -115,9 +115,13 @@ class ChatWindow(QtWidgets.QWidget):
         else:
             print(f"[DEBUG][ChatWindow] Empty text, not sending")
 
-    def add_message(self, message, is_sent, timestamp=None, sender_name=None):
-        print(f"[DEBUG][ChatWindow] add_message: message={message}, is_sent={is_sent}, timestamp={timestamp}")
+    def add_message(self, message, is_sent, timestamp=None, sender_name=None, is_read=None):
+        print(f"[DEBUG][ChatWindow] add_message: message={message}, is_sent={is_sent}, timestamp={timestamp}, is_read={is_read}")
         try:
+            # Hide status on all previous sent messages if adding a new sent message
+            if is_sent:
+                self._hide_previous_message_status()
+            
             # Determine current sender
             current_sender = self.chat_data.get('current_username', 'You') if is_sent else self.chat_data.get('friend_name', 'Friend')
             if sender_name:
@@ -135,14 +139,17 @@ class ChatWindow(QtWidgets.QWidget):
             
             print(f"[DEBUG][ChatWindow] Timestamp logic: show_timestamp={show_timestamp}, is_first={is_first_message}, current_sender={current_sender}, prev_sender={self.last_message_sender}")
             
-            # Create message bubble with timestamp logic
+            # Create message bubble with timestamp logic and read status
+            # Only show status for sent messages and only for the latest one
+            show_status = is_sent  # Show status for all sent messages initially, will hide older ones
             bubble = MessageBubble(
                 message=message, 
                 is_sent=is_sent, 
                 timestamp=timestamp,
                 sender_name=current_sender,
                 show_sender_name=False,  # For 1-1 chat, don't show sender name
-                show_timestamp=show_timestamp
+                show_timestamp=show_timestamp,
+                is_read=is_read if show_status else None  # Pass read status only if showing status
             )
             print(f"[DEBUG][ChatWindow] Created MessageBubble: {bubble}")
             
@@ -295,7 +302,6 @@ class ChatWindow(QtWidgets.QWidget):
         self.message_count = 0
         
         print(f"[DEBUG][ChatWindow] Messages cleared, tracking reset")
-        widget.repaint()
         
         # Force updates of parent widgets too
         self.messages_widget.show()
@@ -308,3 +314,35 @@ class ChatWindow(QtWidgets.QWidget):
             child = self.messages_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+
+    def update_messages_read_status(self):
+        """Update all sent messages to show as read"""
+        try:
+            # Only update the last sent message to show as read
+            last_sent_bubble = None
+            for i in range(self.messages_layout.count() - 1, -1, -1):
+                item = self.messages_layout.itemAt(i)
+                if item and item.widget():
+                    widget = item.widget()
+                    if isinstance(widget, MessageBubble) and widget.is_sent:
+                        last_sent_bubble = widget
+                        break
+            
+            if last_sent_bubble:
+                last_sent_bubble.update_read_status(True)
+                print(f"[DEBUG][ChatWindow] Updated last sent message to read status")
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Error updating read status: {e}")
+
+    def _hide_previous_message_status(self):
+        """Hide status indicators on all previous sent messages"""
+        try:
+            for i in range(self.messages_layout.count()):
+                item = self.messages_layout.itemAt(i)
+                if item and item.widget():
+                    widget = item.widget()
+                    if isinstance(widget, MessageBubble) and widget.is_sent:
+                        # Hide status on previous sent messages
+                        widget.hide_status_indicator()
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Error hiding previous status: {e}")

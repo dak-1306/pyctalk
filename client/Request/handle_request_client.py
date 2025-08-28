@@ -7,6 +7,7 @@ class AsyncPycTalkClient(QObject):
     # Signals for real-time events
     new_message_received = pyqtSignal(dict)  # Emit when new 1-1 message received
     new_group_message_received = pyqtSignal(dict)  # Emit when new group message received
+    messages_read = pyqtSignal(dict)  # Emit when messages are read by recipient
     user_status_changed = pyqtSignal(str, str)  # Emit when user status changes
     async def send_request(self, action, data):
         """
@@ -291,6 +292,11 @@ class AsyncPycTalkClient(QObject):
                 # Real-time group message received
                 print(f"[DEBUG] New group message pushed from server: {message_data}")
                 self.new_group_message_received.emit(message_data)
+                
+            elif action == 'messages_read':
+                # Messages have been read by recipient
+                print(f"[DEBUG] Messages read notification from server: {message_data}")
+                self.messages_read.emit(message_data)
                 
             elif action == 'user_status_change':
                 # User online/offline status change

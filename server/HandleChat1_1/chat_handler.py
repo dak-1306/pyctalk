@@ -62,11 +62,12 @@ class Chat1v1Handler:
                 print(f"[DB] sender_row: {sender_row}, recipient_row: {recipient_row}")
                 if sender_row and recipient_row:
                     print(f"[DB] Lưu tin nhắn: sender_id={sender_row['id']}, receiver_id={recipient_row['id']}, content={message_text}, time_send={timestamp_str}")
+                    # Insert with message status (unread by default)
                     await db.execute(
-                        "INSERT INTO private_messages (sender_id, receiver_id, content, time_send) VALUES (%s, %s, %s, %s)",
-                        (sender_row["id"], recipient_row["id"], message_text, timestamp_str)
+                        "INSERT INTO private_messages (sender_id, receiver_id, content, time_send, is_read) VALUES (%s, %s, %s, %s, %s)",
+                        (sender_row["id"], recipient_row["id"], message_text, timestamp_str, False)
                     )
-                    print(f"[DB] Đã lưu tin nhắn vào DB.")
+                    print(f"[DB] Đã lưu tin nhắn vào DB với trạng thái chưa đọc.")
                 else:
                     print(f"[DB] Không tìm thấy user_id cho sender hoặc recipient.")
             except Exception as db_exc:
@@ -111,12 +112,12 @@ class Chat1v1Handler:
             if not all([user1, user2]):
                 return {"success": False, "message": "Missing user parameters"}
 
-            # Truy vấn DB để lấy lịch sử tin nhắn giữa user1 và user2
+            # Truy vấn DB để lấy lịch sử tin nhắn giữa user1 và user2 với trạng thái đọc
             from database.db import db
             # Nếu user1/user2 là id, dùng trực tiếp, nếu là username thì cần truy vấn id
             # Ở đây giả sử là id
             query = (
-                "SELECT sender_id, receiver_id, content, time_send "
+                "SELECT sender_id, receiver_id, content, time_send, is_read, read_at "
                 "FROM private_messages "
                 "WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s) "
                 "ORDER BY time_send DESC LIMIT %s"
@@ -130,6 +131,8 @@ class Chat1v1Handler:
                     "to": row["receiver_id"],
                     "message": row["content"],
                     "timestamp": str(row["time_send"]),
+                    "is_read": row["is_read"],
+                    "read_at": str(row["read_at"]) if row["read_at"] else None,
                 })
             return {
                 "success": True,
@@ -143,22 +146,60 @@ class Chat1v1Handler:
             return {"success": False, "message": f"Error getting history: {str(e)}"}
 
     async def handle_mark_read(self, writer, request_data: dict):
-        """Mark messages as read"""
+        """Mark messages as read in database and notify sender"""
         try:
-            user = request_data.get("user")
-            chat_partner = request_data.get("chat_partner")
+            user_id = request_data.get("user_id")  # Current user who is reading
+            sender_id = request_data.get("sender_id")  # Person who sent the messages
 
-            if not all([user, chat_partner]):
-                return {"success": False, "message": "Missing parameters"}
+            if not all([user_id, sender_id]):
+                return {"success": False, "message": "Missing user_id or sender_id"}
 
-            chat_id = "_".join(sorted([user, chat_partner]))
-
+            # Update database to mark messages as read
+            from database.db import db
+            from datetime import datetime
+            
+            read_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Mark all unread messages from sender_id to user_id as read
+            result = await db.execute(
+                """UPDATE private_messages 
+                   SET is_read = TRUE, read_at = %s 
+                   WHERE sender_id = %s AND receiver_id = %s AND is_read = FALSE""",
+                (read_time, sender_id, user_id)
+            )
+            
+            # Also update in-memory cache
+            chat_id = "_".join(sorted([str(user_id), str(sender_id)]))
             if chat_id in self.message_history:
                 for message in self.message_history[chat_id]:
-                    if message["to"] == user and message["from"] == chat_partner:
+                    if message["to"] == str(user_id) and message["from"] == str(sender_id):
                         message["read"] = True
 
-            return {"success": True, "message": "Messages marked as read"}
+            # Notify sender that their messages have been read
+            sender_conn = self.user_connections.get(str(sender_id))
+            if sender_conn:
+                _, sender_writer = sender_conn
+                try:
+                    read_notification = {
+                        "action": "messages_read",
+                        "data": {
+                            "reader_id": user_id,
+                            "sender_id": sender_id,  # Add sender_id for proper filtering
+                            "read_at": read_time
+                        }
+                    }
+                    # Send with length prefix
+                    message_json = json.dumps(read_notification)
+                    message_bytes = message_json.encode('utf-8')
+                    length_prefix = len(message_bytes).to_bytes(4, 'big')
+                    
+                    sender_writer.write(length_prefix + message_bytes)
+                    await sender_writer.drain()
+                    print(f"[DEBUG] Notified sender {sender_id} that messages were read by {user_id}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to notify sender {sender_id}: {e}")
+
+            return {"success": True, "message": "Messages marked as read", "affected_rows": result}
 
         except Exception as e:
             return {"success": False, "message": f"Error marking as read: {str(e)}"}
