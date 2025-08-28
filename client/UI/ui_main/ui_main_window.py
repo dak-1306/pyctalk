@@ -418,105 +418,368 @@ class Ui_MainWindow(QtCore.QObject):
             self.groups_list.group_selected.connect(self.on_group_double_clicked)
     
     def _apply_theme(self):
-        """Apply current theme to the interface"""
-        if self.current_theme == "dark":
-            self._apply_dark_theme()
-        else:
+        """Apply theme based on current mode"""
+        if hasattr(self, 'current_theme') and self.current_theme == 'light':
             self._apply_light_theme()
+        else:
+            self._apply_dark_theme()
     
     def _apply_light_theme(self):
-        """Apply light theme styles"""
+        """Apply light theme matching login style"""
         self.centralwidget.setStyleSheet("""
-            QWidget { background: #f8fafc; color: #1f2937; }
-            QFrame#sidebar { 
-                background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px;
+            /* Light theme */
+            QWidget {
+                background-color: #f5f5f5;
+                color: #2c3e50;
+                font-family: 'Segoe UI', Arial, sans-serif;
+                font-size: 14px;
             }
-            QFrame#topbar { 
-                background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;
+            
+            /* Chat area */
+            QScrollArea {
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
             }
-            QFrame#main_card {
-                background: #ffffff; border: 1px solid #e5e7eb; border-radius: 20px;
+            
+            /* Sidebar */
+            QListWidget {
+                background-color: #fafafa;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                selection-background-color: #3fc1c9;
+                selection-color: white;
             }
+            
+            QListWidget::item {
+                padding: 12px;
+                border-bottom: 1px solid #eeeeee;
+            }
+            
+            QListWidget::item:hover {
+                background-color: #f0f8ff;
+            }
+            
+            /* Input area */
+            QLineEdit, QTextEdit {
+                background-color: #ffffff;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 8px;
+                color: #2c3e50;
+            }
+            
+            QLineEdit:focus, QTextEdit:focus {
+                border-color: #3fc1c9;
+            }
+            
+            /* Buttons */
             QPushButton {
-                background: #3b82f6; color: white; border: none; border-radius: 8px; 
-                padding: 10px 16px; font-weight: 600; font-size: 14px;
+                background-color: #3fc1c9;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
             }
-            QPushButton:hover { background: #2563eb; }
-            QPushButton:pressed { background: #1d4ed8; }
-            QTabWidget::pane { border: 0; }
-            QTabBar::tab {
-                background: #f1f5f9; border: 1px solid #e5e7eb; border-radius: 8px;
-                padding: 8px 16px; margin: 2px; font-weight: 600; color: #374151;
+            
+            QPushButton:hover {
+                background-color: #2fb3bb;
             }
-            QTabBar::tab:selected { background: #3b82f6; color: white; }
-            QListWidget { 
-                border: 0; padding: 8px; background: transparent;
+            
+            QPushButton:pressed {
+                background-color: #1a8b93;
             }
-            QListWidget::item { 
-                padding: 12px; border-radius: 8px; margin: 2px;
-                background: transparent; border: 1px solid transparent;
+            
+            /* Theme toggle button */
+            QPushButton#theme_toggle {
+                background-color: #364f6b;
+                color: white;
+                padding: 8px;
+                border-radius: 6px;
             }
-            QListWidget::item:hover { background: #f1f5f9; border: 1px solid #e5e7eb; }
-            QListWidget::item:selected { background: #dbeafe; border: 1px solid #3b82f6; }
-            QLineEdit {
-                padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px;
-                background: white; font-size: 14px;
-            }
-            QLineEdit:focus { border-color: #3b82f6; }
-            QTextEdit { 
-                border: 1px solid #e5e7eb; border-radius: 8px; background: white;
-                padding: 8px; font-size: 14px;
+            
+            QPushButton#theme_toggle:hover {
+                background-color: #2a3e54;
             }
         """)
-        
-        self.btnThemeToggle.setText("🌙")
     
     def _apply_dark_theme(self):
-        """Apply dark theme styles"""
+        """Apply dark theme matching login style"""
         self.centralwidget.setStyleSheet("""
-            QWidget { background: #111827; color: #f9fafb; }
-            QFrame#sidebar { 
-                background: #1f2937; border: 1px solid #374151; border-radius: 16px;
+            /* Dark theme matching login */
+            QWidget {
+                background-color: #1e2a38;
+                color: #ffffff;
+                font-family: 'Segoe UI', Arial, sans-serif;
+                font-size: 14px;
             }
-            QFrame#topbar { 
-                background: #1f2937; border: 1px solid #374151; border-radius: 12px;
+            
+            /* Chat area */
+            QScrollArea {
+                background-color: #2c3e50;
+                border: 1px solid #364f6b;
+                border-radius: 8px;
             }
-            QFrame#main_card {
-                background: #1f2937; border: 1px solid #374151; border-radius: 20px;
+            
+            /* Sidebar */
+            QListWidget {
+                background-color: #364f6b;
+                border: 1px solid #4a5f7a;
+                border-radius: 8px;
+                selection-background-color: #3fc1c9;
+                selection-color: white;
             }
+            
+            QListWidget::item {
+                padding: 12px;
+                border-bottom: 1px solid #4a5f7a;
+                color: #ffffff;
+            }
+            
+            QListWidget::item:hover {
+                background-color: #4a5f7a;
+            }
+            
+            /* Input area */
+            QLineEdit, QTextEdit {
+                background-color: #fafdff;
+                border: 2px solid #3fc1c9;
+                border-radius: 8px;
+                padding: 8px;
+                color: #2c3e50;
+            }
+            
+            QLineEdit:focus, QTextEdit:focus {
+                border-color: #a05a00;
+            }
+            
+            /* Buttons */
             QPushButton {
-                background: #6366f1; color: white; border: none; border-radius: 8px; 
-                padding: 10px 16px; font-weight: 600; font-size: 14px;
+                background-color: #3fc1c9;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
             }
-            QPushButton:hover { background: #5b21b6; }
-            QPushButton:pressed { background: #4c1d95; }
-            QTabWidget::pane { border: 0; }
+            
+            QPushButton:hover {
+                background-color: #2fb3bb;
+            }
+            
+            QPushButton:pressed {
+                background-color: #1a8b93;
+            }
+            
+            /* Theme toggle button */
+            QPushButton#theme_toggle {
+                background-color: #a05a00;
+                color: white;
+                padding: 8px;
+                border-radius: 6px;
+            }
+            
+            QPushButton#theme_toggle:hover {
+                background-color: #8a4a00;
+            }
+        """)
+    
+    def _apply_modern_theme(self):
+        """Apply modern theme matching login/register style"""
+        self.centralwidget.setStyleSheet("""
+            /* Main background matching login */
+            QWidget { 
+                background: #1e2a38; 
+                color: #fafdff; 
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            
+            /* Sidebar styling */
+            QFrame#sidebar { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2a3441, stop:1 #1e2a38);
+                border: 2px solid #3fc1c9;
+                border-radius: 20px;
+                margin: 5px;
+            }
+            
+            /* Top bar styling */
+            QFrame#topbar { 
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3fc1c9, stop:1 #364f6b);
+                border: none;
+                border-radius: 15px;
+                margin: 5px;
+            }
+            
+            /* Main content area */
+            QFrame#main_card {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fafdff, stop:1 #e8f4f8);
+                border: 2px solid #3fc1c9;
+                border-radius: 25px;
+                margin: 5px;
+                color: #1e2a38;
+            }
+            
+            /* Modern buttons */
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3fc1c9, stop:1 #2b8a94);
+                color: white; 
+                border: none; 
+                border-radius: 15px; 
+                padding: 12px 20px; 
+                font-weight: 600; 
+                font-size: 14px;
+                min-height: 20px;
+            }
+            QPushButton:hover { 
+                background-color: #36b3bb;
+            }
+            QPushButton:pressed { 
+                background-color: #2da5ad;
+            }
+            
+            /* Tab styling */
+            QTabWidget::pane { 
+                border: 2px solid #3fc1c9; 
+                border-radius: 15px;
+                background: #fafdff;
+            }
             QTabBar::tab {
-                background: #374151; border: 1px solid #4b5563; border-radius: 8px;
-                padding: 8px 16px; margin: 2px; font-weight: 600; color: #d1d5db;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3fc1c9, stop:1 #2b8a94);
+                border: none;
+                border-radius: 12px;
+                padding: 10px 18px; 
+                margin: 3px; 
+                font-weight: 600; 
+                color: white;
+                min-width: 80px;
             }
-            QTabBar::tab:selected { background: #6366f1; color: white; }
+            QTabBar::tab:selected { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #a05a00, stop:1 #7a4300);
+                color: white;
+                border: 2px solid #fafdff;
+            }
+            QTabBar::tab:hover:!selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #364f6b, stop:1 #2a3441);
+            }
+            
+            /* List widgets */
             QListWidget { 
-                border: 0; padding: 8px; background: transparent;
+                border: 2px solid #3fc1c9;
+                border-radius: 15px;
+                padding: 10px; 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fafdff, stop:1 #e8f4f8);
+                color: #1e2a38;
             }
             QListWidget::item { 
-                padding: 12px; border-radius: 8px; margin: 2px;
-                background: transparent; border: 1px solid transparent; color: #e5e7eb;
+                padding: 15px; 
+                border-radius: 12px; 
+                margin: 3px;
+                background: transparent; 
+                border: 1px solid transparent;
+                font-weight: 500;
             }
-            QListWidget::item:hover { background: #374151; border: 1px solid #4b5563; }
-            QListWidget::item:selected { background: #4338ca; border: 1px solid #6366f1; }
+            QListWidget::item:hover { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3fc1c9, stop:1 #2b8a94);
+                color: white;
+                border: 1px solid #fafdff;
+            }
+            QListWidget::item:selected { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #a05a00, stop:1 #7a4300);
+                color: white;
+                border: 2px solid #fafdff;
+                font-weight: 600;
+            }
+            
+            /* Input fields */
             QLineEdit {
-                padding: 8px 12px; border: 2px solid #4b5563; border-radius: 8px;
-                background: #374151; color: #f9fafb; font-size: 14px;
+                padding: 12px 18px; 
+                border: 2px solid #3fc1c9; 
+                border-radius: 20px;
+                background: #fafdff; 
+                font-size: 15px;
+                color: #1e2a38;
             }
-            QLineEdit:focus { border-color: #6366f1; }
+            QLineEdit:focus { 
+                border: 2.5px solid #364f6b;
+                background: white;
+            }
+            QLineEdit::placeholder {
+                color: #7a5a1e;
+                font-style: italic;
+            }
+            
+            /* Text areas */
             QTextEdit { 
-                border: 1px solid #4b5563; border-radius: 8px; background: #374151;
-                padding: 8px; font-size: 14px; color: #f9fafb;
+                border: 2px solid #3fc1c9; 
+                border-radius: 15px; 
+                background: #fafdff;
+                padding: 12px; 
+                font-size: 14px;
+                color: #1e2a38;
+            }
+            QTextEdit:focus {
+                border: 2.5px solid #364f6b;
+                background: white;
+            }
+            
+            /* Scrollbars */
+            QScrollBar:vertical {
+                background: #1e2a38;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #3fc1c9;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #364f6b;
+            }
+            
+            /* Labels */
+            QLabel {
+                color: #fafdff;
+                font-weight: 500;
+            }
+            
+            /* Menu and status bar */
+            QMenuBar {
+                background: #1e2a38;
+                color: #fafdff;
+                border: none;
+                padding: 5px;
+            }
+            QMenuBar::item {
+                background: transparent;
+                padding: 8px 12px;
+                border-radius: 8px;
+            }
+            QMenuBar::item:selected {
+                background: #3fc1c9;
+            }
+            
+            QStatusBar {
+                background: #1e2a38;
+                color: #3fc1c9;
+                border-top: 1px solid #3fc1c9;
+                font-weight: 500;
             }
         """)
         
-        self.btnThemeToggle.setText("☀️")
+        if hasattr(self, 'btnThemeToggle'):
+            self.btnThemeToggle.setText("�")
     
     def _start_status_monitoring(self):
         """Start background status monitoring"""
@@ -566,7 +829,8 @@ class Ui_MainWindow(QtCore.QObject):
     def retranslateUi(self, MainWindow):
         """Set window title and other translatable strings"""
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "PycTalk - Enhanced Chat Client"))
+        MainWindow.setWindowTitle(_translate("MainWindow", f"🚀 PycTalk - {self.username}"))
+        MainWindow.setWindowIcon(QtGui.QIcon())  # Could add custom icon later
     
     def _open_my_profile(self):
         """Open current user's profile window"""
