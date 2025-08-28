@@ -123,14 +123,31 @@ class Ui_MainWindow(QtCore.QObject):
         print(f"[DEBUG][MainWindow] After processing: current_user_id={chat_data['current_user_id']}, friend_id={friend_id}")
         
         # Ẩn card_container nếu đang hiển thị
-        if self.card_container and self.card_container.isVisible():
-            self.card_container.hide()
+        try:
+            if hasattr(self, 'card_container') and self.card_container and self.card_container.isVisible():
+                self.card_container.hide()
+        except RuntimeError:
+            # Widget đã bị xóa, bỏ qua
+            print("[DEBUG][MainWindow] card_container đã bị xóa, bỏ qua")
+            self.card_container = None
+
+        # Xóa tất cả widgets cũ trong main_layout (trừ topbar) để tránh đè lên nhau
+        widgets_to_remove = []
+        for i in range(self.main_layout.count()):
+            widget = self.main_layout.itemAt(i).widget()
+            # Giữ lại topbar, xóa các widget khác
+            if widget and getattr(widget, 'objectName', lambda: None)() != "topbar":
+                widgets_to_remove.append(widget)
+        for widget in widgets_to_remove:
+            self.main_layout.removeWidget(widget)
+            widget.hide()
+            # Không dùng deleteLater() vì có thể cần dùng lại từ cache
         
         # Ẩn chat window hiện tại (nếu có)
         if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
             current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
             current_chat_window.hide()
-            self.main_layout.removeWidget(current_chat_window)
+            # Không cần removeWidget nữa vì đã xóa ở trên
         
         # Kiểm tra cache, nếu đã có thì dùng lại
         if friend_id in self.chat_windows_cache:
@@ -177,16 +194,35 @@ class Ui_MainWindow(QtCore.QObject):
 
     def _show_main_view(self):
         """Hiển thị main view (card) và ẩn chat windows"""
+        # Xóa tất cả widgets cũ trong main_layout (trừ topbar)
+        widgets_to_remove = []
+        for i in range(self.main_layout.count()):
+            widget = self.main_layout.itemAt(i).widget()
+            # Giữ lại topbar, xóa các widget khác
+            if widget and getattr(widget, 'objectName', lambda: None)() != "topbar":
+                widgets_to_remove.append(widget)
+        for widget in widgets_to_remove:
+            self.main_layout.removeWidget(widget)
+            widget.hide()
+        
         # Ẩn chat window hiện tại
         if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
             current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
             current_chat_window.hide()
-            self.main_layout.removeWidget(current_chat_window)
-        
+            # Không cần removeWidget nữa vì đã xóa ở trên
+
         # Hiển thị card_container
-        if self.card_container:
-            self.main_layout.addWidget(self.card_container, 1)
-            self.card_container.show()
+        try:
+            if hasattr(self, 'card_container') and self.card_container:
+                self.main_layout.addWidget(self.card_container, 1)
+                self.card_container.show()
+        except RuntimeError:
+            # Widget đã bị xóa, tạo lại
+            print("[DEBUG][MainWindow] card_container đã bị xóa, tạo lại")
+            self._setup_main_card()
+            if self.card_container:
+                self.main_layout.addWidget(self.card_container, 1)
+                self.card_container.show()
         
         self.current_chat_friend_id = None
 
@@ -790,8 +826,10 @@ class Ui_MainWindow(QtCore.QObject):
             self.main_layout.removeWidget(widget)
             widget.hide()
             widget.deleteLater()
-        # Xóa tham chiếu đến status_message để tránh lỗi khi widget đã bị xóa
+        
+        # Xóa tham chiếu đến các widget đã bị xóa
         self.status_message = None
+        self.card_container = None  # Đặt về None vì đã bị xóa
         # Thêm khung chat nhóm mới
         print(f"[DEBUG] Creating EmbeddedGroupChatWidget with user_id={self.user_id}, username='{self.username}'")
         chat_widget = EmbeddedGroupChatWidget(self.client, self.user_id, self.username, group_data)
