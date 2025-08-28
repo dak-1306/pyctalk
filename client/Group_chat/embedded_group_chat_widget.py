@@ -7,8 +7,9 @@ from PyQt6.QtCore import QTimer
 from client.Group_chat.group_api_client import GroupAPIClient
 from client.Group_chat.group_chat_logic import GroupChatLogic
 
-# Import MessageBubble (ưu tiên theo cấu trúc dự án của bạn, fallback nếu chạy độc lập)
+# Import MessageBubble và TimeFormatter
 from client.UI.messenger_ui.message_bubble_widget import MessageBubble
+from client.UI.messenger_ui.time_formatter import TimeFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.user_id = user_id
         self.username = username
         self.group_data = group_data
+
+        # Track previous message for timestamp logic (group chat)
+        self.last_message_time = None
+        self.last_message_sender = None
+        self.message_count = 0
+        self.time_formatter = TimeFormatter()
 
         self._setupUI()
 
@@ -49,11 +56,51 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             logger.error(f"[EmbeddedGroupChatWidget] Lỗi reload tin nhắn: {e}")
 
     def add_message(self, message, is_sent, timestamp=None, sender_name=None, show_sender_name=False):
-        """Thêm một message bubble vào UI (cho logic gọi)"""
-        bubble = MessageBubble(message, is_sent, timestamp, sender_name, show_sender_name)
+        """Thêm một message bubble vào UI với timestamp logic giống Messenger"""
         
-        # Connect sender clicked signal
+        # Increment message counter
+        self.message_count += 1
+        is_first_message = self.message_count == 1
+        
+        # Determine sender for comparison
+        current_sender = sender_name if sender_name else ("You" if is_sent else "Unknown")
+        
+        # Check if we should show timestamp using TimeFormatter
+        show_timestamp = False
+        if timestamp:
+            show_timestamp = self.time_formatter.should_show_timestamp(
+                timestamp, 
+                self.last_message_time, 
+                current_sender, 
+                self.last_message_sender,
+                is_first_message
+            )
+        
+        # Format timestamp for display
+        formatted_timestamp = None
+        if timestamp and show_timestamp:
+            formatted_timestamp = self.time_formatter.format_message_time(timestamp)
+        
+        print(f"[DEBUG][GroupChat] add_message: message={message}, sender={current_sender}, show_timestamp={show_timestamp}, formatted_time={formatted_timestamp}")
+        
+        # Create message bubble with timestamp logic
+        bubble = MessageBubble(
+            message, 
+            is_sent, 
+            formatted_timestamp if show_timestamp else None, 
+            sender_name, 
+            show_sender_name,
+            show_timestamp
+        )
+        
+        # Update tracking variables
+        if timestamp:
+            self.last_message_time = timestamp
+        self.last_message_sender = current_sender
+        
+        # Connect signals
         bubble.sender_clicked.connect(self._handle_sender_clicked)
+        bubble.timestamp_clicked.connect(self._handle_timestamp_clicked)
         
         # Remove the stretch item temporarily
         layout_count = self.messages_layout.count()
@@ -83,8 +130,13 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self._scroll_to_bottom()
 
     def clear_messages(self):
-        """Xóa toàn bộ message bubbles khỏi UI (cho logic gọi)"""
+        """Xóa toàn bộ message bubbles khỏi UI và reset timestamp tracking"""
         self._clear_message_bubbles()
+        
+        # Reset timestamp tracking variables
+        self.last_message_time = None
+        self.last_message_sender = None
+        self.message_count = 0
 
     def _setupUI(self):
         """Tạo UI layout"""
@@ -294,3 +346,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         except Exception as e:
             print(f"[ERROR] Failed to show user profile: {e}")
             QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể hiển thị thông tin người dùng: {str(e)}")
+
+    def _handle_timestamp_clicked(self, timestamp):
+        """Handle when user clicks on timestamp"""
+        print(f"[DEBUG] Timestamp clicked: {timestamp}")
+        # Could show detailed timestamp or message info
+        # For now, just log it

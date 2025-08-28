@@ -8,6 +8,7 @@ from .time_formatter import TimeFormatter
 class MessageBubble(QtWidgets.QWidget):
     """Modern message bubble component for chat"""
     sender_clicked = pyqtSignal(str)  # Signal when sender name is clicked
+    timestamp_clicked = pyqtSignal(str)  # Signal when timestamp is clicked
     
     def __init__(self, message, is_sent=True, timestamp=None, sender_name=None, show_sender_name=False, show_timestamp=False, parent=None):
         super().__init__(parent)
@@ -53,6 +54,13 @@ class MessageBubble(QtWidgets.QWidget):
     def showEvent(self, event):
         print(f"[DEBUG][MessageBubble] showEvent triggered for message: {self.message}")
         super().showEvent(event)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse click to toggle timestamp"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Toggle timestamp visibility
+            self.toggle_timestamp_visibility()
+        super().mousePressEvent(event)
     
     def _setup_ui(self):
         """Setup message bubble UI"""
