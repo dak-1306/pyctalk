@@ -25,70 +25,134 @@ class MyProfileWindow(QtWidgets.QDialog):
         
         self._setup_ui()
         
-        # Load profile data on startup
-        asyncio.create_task(self._load_profile_data())
+        # Load profile data on startup - use QTimer to ensure UI is ready
+        QtCore.QTimer.singleShot(100, lambda: asyncio.create_task(self._load_profile_data()))
         
     def _setup_ui(self):
         """Setup the UI components"""
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
         
-        # Header with title and close button
-        header_layout = QtWidgets.QHBoxLayout()
-        header_layout.setContentsMargins(20, 15, 20, 15)
-        
-        title_label = QtWidgets.QLabel("👤 Hồ sơ của tôi")
-        title_label.setStyleSheet("""
+        # Header
+        header_label = QtWidgets.QLabel("👤 Hồ sơ của tôi")
+        header_label.setStyleSheet("""
             QLabel {
-                font-size: 18px;
+                font-size: 20px;
                 font-weight: bold;
                 color: #2c3e50;
+                padding: 10px;
+                background-color: #ecf0f1;
+                border-radius: 8px;
+            }
+        """)
+        header_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(header_label)
+        
+        # Scroll area for form content
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: white;
             }
         """)
         
-        close_btn = QtWidgets.QPushButton("✖")
-        close_btn.setFixedSize(30, 30)
-        close_btn.setStyleSheet("""
+        # Form widget
+        form_widget = QtWidgets.QWidget()
+        form_layout = QtWidgets.QFormLayout(form_widget)
+        form_layout.setLabelAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
+        form_layout.setVerticalSpacing(15)
+        form_layout.setHorizontalSpacing(10)
+        
+        # Create form fields
+        self._create_form_fields(form_layout)
+        
+        scroll.setWidget(form_widget)
+        main_layout.addWidget(scroll)
+        
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        
+        save_btn = QtWidgets.QPushButton("� Lưu thay đổi")
+        save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
+                background-color: #27ae60;
                 color: white;
                 border: none;
-                border-radius: 15px;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 14px;
                 font-weight: bold;
-                font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #229954;
             }
         """)
-        close_btn.clicked.connect(self.close)
+        save_btn.clicked.connect(self._save_profile)
         
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-        header_layout.addWidget(close_btn)
-        layout.addLayout(header_layout)
-        
-        # Main content area
-        content_widget = QtWidgets.QWidget()
-        content_widget.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border-radius: 12px;
-                margin: 0px 15px 15px 15px;
+        cancel_btn = QtWidgets.QPushButton("❌ Hủy")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #95a5a6;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7f8c8d;
             }
         """)
-        content_layout = QtWidgets.QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(20, 20, 20, 20)
-        content_layout.setSpacing(20)
+        cancel_btn.clicked.connect(self.reject)
         
-        # Create profile sections
-        self._create_profile_sections(content_layout)
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        main_layout.addLayout(button_layout)
         
-        layout.addWidget(content_widget)
+    def _create_form_fields(self, layout):
+        """Create form input fields"""
+        # Display name
+        self.display_name_input = QtWidgets.QLineEdit()
+        self._style_input(self.display_name_input)
+        layout.addRow("📝 Tên hiển thị:", self.display_name_input)
         
-        # Footer with action buttons
-        self._create_footer_buttons(layout)
+        # Email
+        self.email_input = QtWidgets.QLineEdit()
+        self._style_input(self.email_input)
+        layout.addRow("📧 Email:", self.email_input)
+        
+        # Bio
+        self.bio_input = QtWidgets.QTextEdit()
+        self.bio_input.setMaximumHeight(80)
+        self._style_input(self.bio_input)
+        layout.addRow("📖 Giới thiệu:", self.bio_input)
+        
+        # Gender
+        self.gender_combo = QtWidgets.QComboBox()
+        self.gender_combo.addItems(["Chọn giới tính", "Nam", "Nữ", "Khác"])
+        self._style_input(self.gender_combo)
+        layout.addRow("⚧ Giới tính:", self.gender_combo)
+        
+        # Phone
+        self.phone_input = QtWidgets.QLineEdit()
+        self._style_input(self.phone_input)
+        layout.addRow("📱 Số điện thoại:", self.phone_input)
+        
+        # Location
+        self.location_input = QtWidgets.QLineEdit()
+        self._style_input(self.location_input)
+        layout.addRow("📍 Địa điểm:", self.location_input)
+        
+        # Birth date
+        self.birth_date_input = QtWidgets.QDateEdit()
+        self.birth_date_input.setCalendarPopup(True)
+        self.birth_date_input.setDate(QtCore.QDate.currentDate())
+        self._style_input(self.birth_date_input)
+        layout.addRow("🎂 Ngày sinh:", self.birth_date_input)
         
     def _create_profile_sections(self, layout):
         """Create all profile sections"""
@@ -190,6 +254,8 @@ class MyProfileWindow(QtWidgets.QDialog):
         """)
         
         info_layout = QtWidgets.QVBoxLayout(info_frame)
+        info_layout.setContentsMargins(15, 15, 15, 15)
+        info_layout.setSpacing(15)
         
         # Section title
         title_label = QtWidgets.QLabel("📝 Thông tin cá nhân")
@@ -205,7 +271,9 @@ class MyProfileWindow(QtWidgets.QDialog):
         
         # Create form fields
         form_layout = QtWidgets.QFormLayout()
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(15)
+        form_layout.setVerticalSpacing(15)
+        form_layout.setHorizontalSpacing(10)
         
         # Style for form labels
         info_frame.setStyleSheet("""
@@ -231,7 +299,7 @@ class MyProfileWindow(QtWidgets.QDialog):
         # Bio
         self.bio_input = QtWidgets.QTextEdit()
         self.bio_input.setPlaceholderText("Giới thiệu về bản thân...")
-        self.bio_input.setMaximumHeight(60)
+        self.bio_input.setFixedHeight(80)  # Use fixed height instead of maximum
         self._style_input(self.bio_input)
         form_layout.addRow("Tiểu sử:", self.bio_input)
         
@@ -361,7 +429,7 @@ class MyProfileWindow(QtWidgets.QDialog):
                 background-color: #7f8c8d;
             }
         """)
-        cancel_btn.clicked.connect(self.close)
+        cancel_btn.clicked.connect(self.reject)
         
         footer_layout.addStretch()
         footer_layout.addWidget(cancel_btn)
@@ -370,19 +438,38 @@ class MyProfileWindow(QtWidgets.QDialog):
         
     def _style_input(self, widget):
         """Apply consistent styling to input widgets"""
-        widget.setStyleSheet("""
-            QLineEdit, QTextEdit, QComboBox, QDateEdit {
-                padding: 8px 12px;
-                border: 2px solid #bdc3c7;
-                border-radius: 6px;
-                font-size: 13px;
-                background-color: white;
-                color: #2c3e50;
-            }
-            QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus {
-                border-color: #3498db;
-            }
-        """)
+        if isinstance(widget, QtWidgets.QTextEdit):
+            # Special styling for QTextEdit
+            widget.setStyleSheet("""
+                QTextEdit {
+                    padding: 10px 12px;
+                    border: 2px solid #bdc3c7;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    background-color: white;
+                    color: #2c3e50;
+                }
+                QTextEdit:focus {
+                    border-color: #3498db;
+                }
+            """)
+        else:
+            # Styling for other input widgets
+            widget.setStyleSheet("""
+                QLineEdit, QComboBox, QDateEdit {
+                    padding: 10px 12px;
+                    border: 2px solid #bdc3c7;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    background-color: white;
+                    color: #2c3e50;
+                    min-height: 20px;
+                    height: 36px;
+                }
+                QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
+                    border-color: #3498db;
+                }
+            """)
         
     async def _load_profile_data(self):
         """Load user profile data from server"""
@@ -393,8 +480,8 @@ class MyProfileWindow(QtWidgets.QDialog):
             
             print(f"[DEBUG] Profile response: {response}")
             
-            if response and response.get("success"):
-                self.profile_data = response.get("profile", {})
+            if response and response.get("status") == "ok":
+                self.profile_data = response.get("data", {})
                 self._populate_fields()
             else:
                 print(f"[DEBUG] Failed to load profile: {response}")
@@ -407,18 +494,28 @@ class MyProfileWindow(QtWidgets.QDialog):
             
     def _populate_fields(self):
         """Populate form fields with profile data"""
+        print(f"[DEBUG] _populate_fields called with data: {self.profile_data}")
+        
         # Basic info
         display_name = self.profile_data.get("display_name", self.username)
+        print(f"[DEBUG] Setting display_name: {display_name}")
+        
         self.display_name_input.setText(display_name)
+        
+        # Update the username display to show display name instead of @username
+        self.username_display.setText(display_name)
+        print(f"[DEBUG] Updated username_display to: {display_name}")
         
         bio = self.profile_data.get("bio", "")
         self.bio_input.setPlainText(bio)
         
         phone = self.profile_data.get("phone", "")
-        self.phone_input.setText(phone)
+        if phone:
+            self.phone_input.setText(phone)
         
         location = self.profile_data.get("location", "")
-        self.location_input.setText(location)
+        if location:
+            self.location_input.setText(location)
         
         # Gender
         gender = self.profile_data.get("gender", "")
@@ -440,6 +537,8 @@ class MyProfileWindow(QtWidgets.QDialog):
                     self.birth_date_edit.setDate(date)
             except:
                 pass
+                
+        print(f"[DEBUG] _populate_fields completed")
                 
     def _set_default_values(self):
         """Set default values when no profile data exists"""
@@ -471,7 +570,7 @@ class MyProfileWindow(QtWidgets.QDialog):
             
             if response and response.get("success"):
                 QtWidgets.QMessageBox.information(self, "Thành công", "Cập nhật hồ sơ thành công!")
-                self.close()
+                self.accept()
             else:
                 error_msg = response.get("message", "Lỗi không xác định") if response else "Lỗi kết nối"
                 QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể cập nhật hồ sơ: {error_msg}")

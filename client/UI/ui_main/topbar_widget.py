@@ -80,8 +80,6 @@ class TopBarWidget(QtWidgets.QFrame):
                 border-color: #3b82f6;
             }
         """)
-        # Connect avatar click signal
-        self.avatar_label.clicked.connect(self.avatar_clicked.emit)
         
         self.username_label = QtWidgets.QLabel(username or "Guest")
         self.username_label.setFont(QtGui.QFont("Arial", 11, QtGui.QFont.Weight.DemiBold))
@@ -90,7 +88,7 @@ class TopBarWidget(QtWidgets.QFrame):
         user_layout.addWidget(self.avatar_label)
         user_layout.addWidget(self.username_label)
         
-        # Make the whole user container clickable too
+        # Make the whole user container clickable (only one event handler)
         user_container.mousePressEvent = lambda event: self.avatar_clicked.emit() if event.button() == QtCore.Qt.MouseButton.LeftButton else None
         
         tb_layout.addWidget(user_container)
