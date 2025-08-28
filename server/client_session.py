@@ -273,7 +273,7 @@ class ClientSession:
 
             elif action == "update_user_profile" and self.user_profile_handler:
                 user_id = data["data"]["user_id"]
-                profile_data = data["data"]["profile_data"]
+                profile_data = data["data"]  # All profile data is in data directly
                 result = await self.user_profile_handler.update_user_profile(user_id, profile_data)
                 await self.send_response(result, request_id)
 

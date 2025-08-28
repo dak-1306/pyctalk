@@ -124,22 +124,49 @@ class UserProfileHandler:
         """Cập nhật thông tin profile của user"""
         try:
             print(f"[DEBUG] update_user_profile called for user_id: {user_id}")
+            print(f"[DEBUG] profile_data: {profile_data}")
             
             # Ensure database connection
             if not self.db.pool:
                 await self.db.connect()
             
-            # For now, just return success without actually updating
-            # since user_profiles table might not exist
-            print(f"✅ Mock update profile for user_id {user_id}")
-            return {"status": "success", "message": "Profile updated successfully"}
+            # Update user_profiles table
+            update_query = """
+                UPDATE user_profiles 
+                SET display_name = %s, bio = %s, gender = %s, birth_date = %s, 
+                    phone = %s, location = %s, updated_at = NOW()
+                WHERE user_id = %s
+            """
+            
+            # Prepare values
+            birth_date = profile_data.get('birth_date')
+            if birth_date == "":
+                birth_date = None
+                
+            values = (
+                profile_data.get('display_name', ''),
+                profile_data.get('bio', ''),
+                profile_data.get('gender', ''),
+                birth_date,
+                profile_data.get('phone', ''),
+                profile_data.get('location', ''),
+                user_id
+            )
+            
+            result = await self.db.execute(update_query, values)
+            
+            # Also update email in users table if provided
+            if profile_data.get('email'):
+                email_update_query = "UPDATE users SET email = %s WHERE id = %s"
+                await self.db.execute(email_update_query, (profile_data['email'], user_id))
+            
+            print(f"✅ Profile updated successfully for user_id {user_id}")
+            return {"status": "ok", "message": "Profile updated successfully"}
             
         except Exception as e:
             print(f"❌ Lỗi update_user_profile: {e}")
             import traceback
             traceback.print_exc()
-            return {"status": "error", "message": str(e)}
-            print(f"❌ Lỗi update_user_profile: {e}")
             return {"status": "error", "message": str(e)}
 
 # Create global instance

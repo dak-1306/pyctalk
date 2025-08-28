@@ -533,14 +533,21 @@ class Ui_MainWindow(QtCore.QObject):
     def _open_my_profile(self):
         """Open current user's profile window"""
         try:
+            # Check if profile window is already open
+            if hasattr(self, '_profile_window') and self._profile_window and self._profile_window.isVisible():
+                print("[DEBUG] Profile window already open, bringing to front")
+                self._profile_window.raise_()
+                self._profile_window.activateWindow()
+                return
+                
             print(f"[DEBUG] Opening profile for user: {self.username} (ID: {self.user_id})")
-            profile_window = MyProfileWindow(
+            self._profile_window = MyProfileWindow(
                 client=self.client,
                 user_id=self.user_id,
                 username=self.username,
                 parent=self.main_window
             )
-            profile_window.show()
+            self._profile_window.show()
         except Exception as e:
             print(f"[ERROR] Failed to open profile window: {e}")
             QtWidgets.QMessageBox.critical(
