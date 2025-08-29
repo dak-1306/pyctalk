@@ -23,6 +23,7 @@ class ChatWindow(QtWidgets.QWidget):
     """Individual chat window UI only"""
     back_clicked = pyqtSignal()
     message_send_requested = pyqtSignal(str)   # UI phát tín hiệu khi muốn gửi tin nhắn
+    file_send_requested = pyqtSignal(dict)     # UI phát tín hiệu khi muốn gửi file
 
     def __init__(self, chat_data=None, parent=None, **kwargs):
         super().__init__(parent)
@@ -143,32 +144,188 @@ class ChatWindow(QtWidgets.QWidget):
         main_layout.addWidget(chat_container)
 
     def _create_input_area(self, main_layout):
+        # Main input container
+        input_container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(input_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(5)
+        
+        # File preview area (initially hidden)
+        self.file_preview_area = QtWidgets.QWidget()
+        self.file_preview_layout = QtWidgets.QVBoxLayout(self.file_preview_area)
+        self.file_preview_layout.setContentsMargins(5, 5, 5, 5)
+        self.file_preview_area.hide()
+        container_layout.addWidget(self.file_preview_area)
+        
+        # Input area with text and buttons
         input_area = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(input_area)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
 
+        # File upload widget
+        try:
+            from UI.messenger_ui.file_upload_widget import FileUploadWidget
+            self.file_upload = FileUploadWidget()
+            self.file_upload.file_selected.connect(self._on_file_selected)
+            layout.addWidget(self.file_upload)
+        except ImportError as e:
+            print(f"[WARNING][ChatWindow] Could not import FileUploadWidget: {e}")
+            self.file_upload = None
+
+        # Text input
         self.txt_message = QtWidgets.QLineEdit()
         self.txt_message.setPlaceholderText("Type a message...")
+        self.txt_message.returnPressed.connect(self._on_send_clicked)
 
+        # Send button
         self.btn_send = QtWidgets.QPushButton("➤")
         self.btn_send.clicked.connect(self._on_send_clicked)
+        self.btn_send.setFixedSize(40, 35)
+        self.btn_send.setStyleSheet("""
+            QPushButton {
+                background-color: #0084ff;
+                color: white;
+                border: none;
+                border-radius: 17px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0066cc;
+            }
+            QPushButton:pressed {
+                background-color: #004499;
+            }
+        """)
 
         layout.addWidget(self.txt_message)
         layout.addWidget(self.btn_send)
-        main_layout.addWidget(input_area)
+        container_layout.addWidget(input_area)
+        main_layout.addWidget(input_container)
+        
+        # Store references for file handling
+        self.selected_file_path = None
+        self.selected_file_type = None
+        self.current_file_preview = None
 
     # ===== UI actions =====
     def _on_send_clicked(self):
-        text = self.txt_message.text().strip()
-        print(f"[DEBUG][ChatWindow] _on_send_clicked: text='{text}'")
-        if text:
-            print(f"[DEBUG][ChatWindow] Emitting message_send_requested signal")
-            self.message_send_requested.emit(text)
-            self.txt_message.clear()
+        # Check if we have a file to send
+        if self.selected_file_path and self.selected_file_type:
+            self._send_file_message()
         else:
-            print(f"[DEBUG][ChatWindow] Empty text, not sending")
+            # Send text message
+            text = self.txt_message.text().strip()
+            print(f"[DEBUG][ChatWindow] _on_send_clicked: text='{text}'")
+            if text:
+                print(f"[DEBUG][ChatWindow] Emitting message_send_requested signal")
+                self.message_send_requested.emit(text)
+                self.txt_message.clear()
+            else:
+                print(f"[DEBUG][ChatWindow] Empty text, not sending")
+                
+    def _on_file_selected(self, file_path, file_type):
+        """Handle file selection from upload widget"""
+        print(f"[DEBUG][ChatWindow] File selected: {file_path}, type: {file_type}")
+        self.selected_file_path = file_path
+        self.selected_file_type = file_type
+        self._show_file_preview(file_path, file_type)
+        
+    def _show_file_preview(self, file_path, file_type):
+        """Show preview of selected file"""
+        try:
+            from UI.messenger_ui.file_upload_widget import FilePreviewWidget
+            
+            # Remove existing preview
+            if self.current_file_preview:
+                self.file_preview_layout.removeWidget(self.current_file_preview)
+                self.current_file_preview.deleteLater()
+                
+            # Create new preview
+            self.current_file_preview = FilePreviewWidget(file_path, file_type)
+            self.current_file_preview.remove_file.connect(self._remove_file_preview)
+            self.file_preview_layout.addWidget(self.current_file_preview)
+            
+            # Show preview area
+            self.file_preview_area.show()
+            
+        except ImportError as e:
+            print(f"[WARNING][ChatWindow] Could not import FilePreviewWidget: {e}")
+            
+    def _remove_file_preview(self):
+        """Remove file preview and reset selection"""
+        if self.current_file_preview:
+            self.file_preview_layout.removeWidget(self.current_file_preview)
+            self.current_file_preview.deleteLater()
+            self.current_file_preview = None
+            
+        # Hide preview area
+        self.file_preview_area.hide()
+        
+        # Reset file selection
+        self.selected_file_path = None
+        self.selected_file_type = None
+        if self.file_upload:
+            self.file_upload.reset()
+            
+    def _send_file_message(self):
+        """Send file message with optional text caption"""
+        if not self.selected_file_path:
+            return
+            
+        text_caption = self.txt_message.text().strip()
+        print(f"[DEBUG][ChatWindow] Sending file: {self.selected_file_path} with caption: '{text_caption}'")
+        
+        # Create message data for file
+        message_data = {
+            'file_path': self.selected_file_path,
+            'file_type': self.selected_file_type,
+            'caption': text_caption
+        }
+        
+        # Emit file send signal
+        self.file_send_requested.emit(message_data)
+            
+        # Clear input and preview
+        self.txt_message.clear()
+        self._remove_file_preview()
+        
+    def _on_file_clicked(self, file_path):
+        """Handle file click to open/view file"""
+        print(f"[DEBUG][ChatWindow] File clicked: {file_path}")
+        try:
+            import os
+            import subprocess
+            import platform
+            
+            if os.path.exists(file_path):
+                # Open file with default application
+                if platform.system() == 'Windows':
+                    os.startfile(file_path)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.call(['open', file_path])
+                else:  # Linux
+                    subprocess.call(['xdg-open', file_path])
+            else:
+                print(f"[ERROR][ChatWindow] File not found: {file_path}")
+                
+        except Exception as e:
+            print(f"[ERROR][ChatWindow] Failed to open file: {e}")
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Error", f"Could not open file: {str(e)}")
 
     def add_message(self, message, is_sent, timestamp=None, sender_name=None, is_read=None):
-        print(f"[DEBUG][ChatWindow] add_message: message={message}, is_sent={is_sent}, timestamp={timestamp}, is_read={is_read}")
+        """Add text message to chat"""
+        self._add_message_internal(message, 'text', is_sent, timestamp, sender_name, is_read)
+        
+    def add_media_message(self, message_data, is_sent, timestamp=None, sender_name=None, is_read=None):
+        """Add media message (image, file, etc.) to chat"""
+        self._add_message_internal(message_data, 'media', is_sent, timestamp, sender_name, is_read)
+        
+    def _add_message_internal(self, message_content, content_type, is_sent, timestamp=None, sender_name=None, is_read=None):
+        """Internal method to add any type of message"""
+        print(f"[DEBUG][ChatWindow] add_message: message={message_content}, type={content_type}, is_sent={is_sent}, timestamp={timestamp}, is_read={is_read}")
         try:
             # Hide status on all previous sent messages if adding a new sent message
             if is_sent:
@@ -191,18 +348,47 @@ class ChatWindow(QtWidgets.QWidget):
             
             print(f"[DEBUG][ChatWindow] Timestamp logic: show_timestamp={show_timestamp}, is_first={is_first_message}, current_sender={current_sender}, prev_sender={self.last_message_sender}")
             
-            # Create message bubble with timestamp logic and read status
-            # Only show status for sent messages and only for the latest one
-            show_status = is_sent  # Show status for all sent messages initially, will hide older ones
-            bubble = MessageBubble(
-                message=message, 
-                is_sent=is_sent, 
-                timestamp=timestamp,
-                sender_name=current_sender,
-                show_sender_name=False,  # For 1-1 chat, don't show sender name
-                show_timestamp=show_timestamp,
-                is_read=is_read if show_status else None  # Pass read status only if showing status
-            )
+            # Create appropriate message bubble based on content type
+            if content_type == 'media':
+                # Use MediaMessageBubble for media content
+                try:
+                    from UI.messenger_ui.media_message_bubble import MediaMessageBubble
+                    bubble = MediaMessageBubble(
+                        message_data=message_content,
+                        is_sent=is_sent,
+                        timestamp=timestamp,
+                        sender_name=current_sender,
+                        show_sender_name=False,  # For 1-1 chat, don't show sender name
+                        show_timestamp=show_timestamp,
+                        is_read=is_read if is_sent else None
+                    )
+                    # Connect media bubble signals
+                    bubble.file_clicked.connect(self._on_file_clicked)
+                except ImportError as e:
+                    print(f"[WARNING][ChatWindow] Could not import MediaMessageBubble: {e}")
+                    # Fallback to text bubble with file info
+                    file_info = f"📎 {message_content.get('file_name', 'File')}"
+                    bubble = MessageBubble(
+                        message=file_info, 
+                        is_sent=is_sent, 
+                        timestamp=timestamp,
+                        sender_name=current_sender,
+                        show_sender_name=False,
+                        show_timestamp=show_timestamp,
+                        is_read=is_read if is_sent else None
+                    )
+            else:
+                # Use regular MessageBubble for text content
+                bubble = MessageBubble(
+                    message=message_content, 
+                    is_sent=is_sent, 
+                    timestamp=timestamp,
+                    sender_name=current_sender,
+                    show_sender_name=False,  # For 1-1 chat, don't show sender name
+                    show_timestamp=show_timestamp,
+                    is_read=is_read if is_sent else None
+                )
+                
             print(f"[DEBUG][ChatWindow] Created MessageBubble: {bubble}")
             
             # Update tracking variables
@@ -221,8 +407,26 @@ class ChatWindow(QtWidgets.QWidget):
                     self.messages_layout.removeItem(last_item)
                     print(f"[DEBUG][ChatWindow] Removed stretch item")
             
-            # Thêm message bubble vào layout
-            self.messages_layout.addWidget(bubble)
+            # Wrap bubble in container for proper alignment
+            if content_type == 'media':
+                # For media messages, create a container that allows proper alignment
+                container = QtWidgets.QWidget()
+                container_layout = QtWidgets.QHBoxLayout(container)
+                container_layout.setContentsMargins(0, 0, 0, 0)
+                
+                if is_sent:
+                    # Sent messages: add stretch then bubble (right align)
+                    container_layout.addStretch()
+                    container_layout.addWidget(bubble)
+                else:
+                    # Received messages: add bubble then stretch (left align)
+                    container_layout.addWidget(bubble)
+                    container_layout.addStretch()
+                
+                self.messages_layout.addWidget(container)
+            else:
+                # Regular text messages can be added directly
+                self.messages_layout.addWidget(bubble)
             
             # Thêm stretch ở cuối để đẩy messages lên trên
             self.messages_layout.addStretch()

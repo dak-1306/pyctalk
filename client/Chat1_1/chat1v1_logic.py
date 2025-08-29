@@ -1,4 +1,5 @@
 import asyncio
+import os
 from PyQt6.QtCore import QObject, pyqtSignal
 
 class Chat1v1Logic(QObject):
@@ -35,6 +36,11 @@ class Chat1v1Logic(QObject):
             self.ui.message_send_requested.connect(
                 lambda msg: asyncio.create_task(self.send_message(msg))
             )
+            # Connect file send signal if available
+            if hasattr(self.ui, 'file_send_requested'):
+                self.ui.file_send_requested.connect(
+                    lambda file_data: asyncio.create_task(self.send_file_message(file_data))
+                )
             self._signal_connected = True
             print(f"[DEBUG][Chat1v1Logic] Signal connected for friend_id={self.friend_id}")
             
@@ -211,13 +217,37 @@ class Chat1v1Logic(QObject):
             
             for m in batch:
                 sender_id = int(m.get("user_id") or m.get("from"))
-                content = m.get("message", "")
+                message_type = m.get("message_type", "text")
                 timestamp = m.get("timestamp", None)
                 is_read = m.get("is_read", None)
                 
                 # For sent messages, pass read status; for received messages, don't show status
                 message_is_read = is_read if sender_id == self.current_user_id else None
-                self.ui.add_message(content, sender_id == self.current_user_id, timestamp, None, message_is_read)
+                is_sent = sender_id == self.current_user_id
+                
+                if message_type == "text":
+                    # Regular text message
+                    content = m.get("message", "")
+                    self.ui.add_message(content, is_sent, timestamp, None, message_is_read)
+                else:
+                    # Media message
+                    message_data = {
+                        'message_type': message_type,
+                        'content': m.get("message", ""),  # Caption
+                        'file_path': m.get("file_path"),
+                        'file_name': m.get("file_name"),
+                        'file_size': m.get("file_size"),
+                        'mime_type': m.get("mime_type"),
+                        'thumbnail_path': m.get("thumbnail_path")
+                    }
+                    if hasattr(self.ui, 'add_media_message'):
+                        self.ui.add_media_message(message_data, is_sent, timestamp, None, message_is_read)
+                    else:
+                        # Fallback to text message with file info
+                        file_info = f"📎 {m.get('file_name', 'File')}"
+                        if m.get("message"):  # If there's a caption
+                            file_info += f"\n{m.get('message')}"
+                        self.ui.add_message(file_info, is_sent, timestamp, None, message_is_read)
             
             # Small delay between batches for smooth effect
             if i + batch_size < len(messages):
@@ -321,6 +351,87 @@ class Chat1v1Logic(QObject):
             print(f"[ERROR][Chat1v1Logic] Send message timeout after 10 seconds")
         except Exception as e:
             print("[ERROR] send_message:", e)
+            import traceback
+            traceback.print_exc()
+            
+    async def send_file_message(self, file_data):
+        """Send file message with optional caption"""
+        try:
+            print(f"[DEBUG][Chat1v1Logic] send_file_message called: file_data={file_data}")
+            
+            file_path = file_data.get('file_path')
+            file_type = file_data.get('file_type')
+            caption = file_data.get('caption', '')
+            
+            if not file_path or not os.path.exists(file_path):
+                print(f"[ERROR][Chat1v1Logic] File not found: {file_path}")
+                return
+                
+            # Upload file and get metadata
+            try:
+                # Import media handler
+                import sys
+                sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'server'))
+                from media_handler import MediaHandler
+                
+                media_handler = MediaHandler()
+                file_metadata = media_handler.save_uploaded_file(file_path, os.path.basename(file_path))
+                print(f"[DEBUG][Chat1v1Logic] File uploaded successfully: {file_metadata}")
+                
+                # Send file message via API
+                if hasattr(self.api_client, 'send_file_message'):
+                    resp = await asyncio.wait_for(
+                        self.api_client.send_file_message(
+                            self.current_user_id, 
+                            self.friend_id, 
+                            file_metadata,
+                            caption
+                        ),
+                        timeout=30.0  # 30 seconds for file upload
+                    )
+                else:
+                    # Fallback: send as text with file info
+                    file_info = f"📎 Sent file: {file_metadata['file_name']}"
+                    if caption:
+                        file_info += f"\n{caption}"
+                    resp = await asyncio.wait_for(
+                        self.api_client.send_message(self.current_user_id, self.friend_id, file_info),
+                        timeout=10.0
+                    )
+                    
+                print(f"[DEBUG][Chat1v1Logic] send_file_message response: {resp}")
+                
+                if resp and resp.get("success"):
+                    # Create message data for UI
+                    message_data = {
+                        'message_type': file_metadata['message_type'],
+                        'content': caption,
+                        'file_path': file_metadata['file_path'],
+                        'file_name': file_metadata['file_name'],
+                        'file_size': file_metadata['file_size'],
+                        'mime_type': file_metadata['mime_type'],
+                        'thumbnail_path': file_metadata.get('thumbnail_path')
+                    }
+                    
+                    timestamp = None
+                    if 'data' in resp and 'timestamp' in resp['data']:
+                        timestamp = resp['data']['timestamp']
+                        
+                    # Add media message to UI
+                    self.ui.add_media_message(message_data, True, timestamp, None, False)
+                    print(f"[DEBUG][Chat1v1Logic] File message added to UI successfully")
+                else:
+                    print(f"[ERROR][Chat1v1Logic] Send file message failed: {resp}")
+                    
+            except Exception as upload_error:
+                print(f"[ERROR][Chat1v1Logic] File upload failed: {upload_error}")
+                import traceback
+                traceback.print_exc()
+                
+        except asyncio.TimeoutError:
+            print(f"[ERROR][Chat1v1Logic] Send file message timeout")
+        except Exception as e:
+            print(f"[ERROR][Chat1v1Logic] send_file_message error: {e}")
             import traceback
             traceback.print_exc()
 

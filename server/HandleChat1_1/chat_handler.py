@@ -16,6 +16,8 @@ class Chat1v1Handler:
 
         if action == "send_message":
             return await self.handle_send_message(writer, data.get("data", {}))
+        elif action == "send_file_message":
+            return await self.handle_send_file_message(writer, data.get("data", {}))
         elif action == "get_chat_history":
             return await self.handle_get_history(writer, data.get("data", {}))
         elif action == "mark_as_read":
@@ -101,6 +103,98 @@ class Chat1v1Handler:
 
         except Exception as e:
             return {"success": False, "message": f"Error sending message: {str(e)}"}
+            
+    async def handle_send_file_message(self, writer, message_data: dict):
+        """Handle sending a file message with metadata"""
+        try:
+            sender = message_data.get("from")
+            recipient = message_data.get("to")
+            message_type = message_data.get("message_type", "file")
+            content = message_data.get("content", "")  # Caption text
+            file_path = message_data.get("file_path")
+            file_name = message_data.get("file_name")
+            file_size = message_data.get("file_size", 0)
+            mime_type = message_data.get("mime_type")
+            thumbnail_path = message_data.get("thumbnail_path")
+
+            if not all([sender, recipient, file_path, file_name]):
+                return {"success": False, "message": "Missing required file message parameters"}
+
+            print(f"[DEBUG][Chat1v1Handler] Handling file message: {message_type} from {sender} to {recipient}")
+
+            # Create message object with timestamp
+            timestamp = datetime.now()
+            timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            
+            message_obj = {
+                "id": f"{sender}_{recipient}_{timestamp.timestamp()}",
+                "from": sender,
+                "to": recipient,
+                "message_type": message_type,
+                "content": content,
+                "file_path": file_path,
+                "file_name": file_name,
+                "file_size": file_size,
+                "mime_type": mime_type,
+                "thumbnail_path": thumbnail_path,
+                "timestamp": timestamp_str,
+                "is_read": False
+            }
+
+            # Save to database with media fields
+            try:
+                from database.db import db
+                
+                sender_row = await db.fetch_one("SELECT id FROM users WHERE id = %s", (sender,))
+                recipient_row = await db.fetch_one("SELECT id FROM users WHERE id = %s", (recipient,))
+                
+                if sender_row and recipient_row:
+                    print(f"[DB] Saving file message: sender_id={sender_row['id']}, receiver_id={recipient_row['id']}, type={message_type}")
+                    await db.execute(
+                        """INSERT INTO private_messages 
+                           (sender_id, receiver_id, content, time_send, is_read, 
+                            message_type, file_path, file_name, file_size, mime_type, thumbnail_path) 
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                        (sender_row["id"], recipient_row["id"], content, timestamp_str, False,
+                         message_type, file_path, file_name, file_size, mime_type, thumbnail_path)
+                    )
+                    print(f"[DB] File message saved to database")
+                else:
+                    print(f"[DB] Could not find user IDs for sender or recipient")
+                    
+            except Exception as db_exc:
+                print(f"❌ Error saving file message to DB: {db_exc}")
+
+            # Send push message to recipient if online
+            recipient_conn = self.user_connections.get(str(recipient))
+            if recipient_conn:
+                try:
+                    session_id, recipient_writer = recipient_conn
+                    push_message = {
+                        "action": "new_message",
+                        "data": message_obj
+                    }
+                    await self._send_message_to_client(recipient_writer, push_message)
+                    print(f"[PUSH] File message sent to recipient {recipient}")
+                except Exception as push_exc:
+                    print(f"❌ Error sending push file message: {push_exc}")
+            else:
+                print(f"[PUSH] Recipient {recipient} is not online")
+
+            return {
+                "success": True,
+                "data": {
+                    "timestamp": timestamp_str,
+                    "message_id": message_obj["id"]
+                },
+                "message": "File message sent successfully"
+            }
+
+        except Exception as e:
+            print(f"❌ Error handling file message: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "message": f"Error sending file message: {str(e)}"}
 
     async def handle_get_history(self, writer, request_data: dict):
         """Get chat history between two users with pagination support"""
@@ -128,9 +222,10 @@ class Chat1v1Handler:
             count_result = await db.fetch_one(count_query, count_params)
             total_messages = count_result["total"] if count_result else 0
             
-            # Then get the paginated messages
+            # Then get the paginated messages with media fields
             query = (
-                "SELECT sender_id, receiver_id, content, time_send, is_read, read_at "
+                "SELECT sender_id, receiver_id, content, time_send, is_read, read_at, "
+                "message_type, file_path, file_name, file_size, mime_type, thumbnail_path "
                 "FROM private_messages "
                 "WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s) "
                 "ORDER BY time_send DESC LIMIT %s OFFSET %s"
@@ -139,14 +234,27 @@ class Chat1v1Handler:
             rows = await db.fetch_all(query, params)
             messages = []
             for row in rows:
-                messages.append({
+                message_data = {
                     "from": row["sender_id"],
                     "to": row["receiver_id"],
                     "message": row["content"],
                     "timestamp": str(row["time_send"]),
                     "is_read": row["is_read"],
                     "read_at": str(row["read_at"]) if row["read_at"] else None,
-                })
+                    "message_type": row.get("message_type", "text")
+                }
+                
+                # Add media fields if present
+                if row.get("message_type") and row.get("message_type") != "text":
+                    message_data.update({
+                        "file_path": row.get("file_path"),
+                        "file_name": row.get("file_name"),
+                        "file_size": row.get("file_size"),
+                        "mime_type": row.get("mime_type"),
+                        "thumbnail_path": row.get("thumbnail_path")
+                    })
+                    
+                messages.append(message_data)
             return {
                 "success": True,
                 "data": {
@@ -219,6 +327,20 @@ class Chat1v1Handler:
 
         except Exception as e:
             return {"success": False, "message": f"Error marking as read: {str(e)}"}
+
+    async def _send_message_to_client(self, writer, message_dict):
+        """Send message to client with proper formatting"""
+        try:
+            message_json = json.dumps(message_dict, ensure_ascii=False)
+            message_bytes = message_json.encode('utf-8')
+            length_prefix = len(message_bytes).to_bytes(4, 'big')
+            
+            writer.write(length_prefix + message_bytes)
+            await writer.drain()
+            print(f"[DEBUG] Message sent to client successfully")
+        except Exception as e:
+            print(f"❌ Error sending message to client: {e}")
+            raise
 
     def register_user_connection(self, username: str, user_id: str, writer):
         """Register user connection with session-specific tracking"""
