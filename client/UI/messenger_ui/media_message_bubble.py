@@ -283,18 +283,16 @@ class MediaMessageBubble(QWidget):
                     color: #bbdefb;
                 }
                 QFrame#fileContainer {
-                    background-color: rgba(255, 255, 255, 0.1);
                     border-radius: 8px;
                     border: 1px solid rgba(255, 255, 255, 0.2);
                 }
                 QPushButton {
-                    background-color: rgba(255, 255, 255, 0.2);
                     border: none;
                     border-radius: 15px;
                     color: white;
                 }
                 QPushButton:hover {
-                    background-color: rgba(255, 255, 255, 0.3);
+                    background-color: rgba(255, 255, 255, 0.1);
                 }
             """)
         else:
@@ -316,7 +314,6 @@ class MediaMessageBubble(QWidget):
                     color: #666;
                 }
                 QFrame#fileContainer {
-                    background-color: rgba(0, 0, 0, 0.05);
                     border-radius: 8px;
                     border: 1px solid rgba(0, 0, 0, 0.1);
                 }

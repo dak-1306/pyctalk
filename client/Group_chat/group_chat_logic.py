@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QMessageBox, QInputDialog, QListWidgetItem
 from PyQt6 import QtCore
 import re
 import asyncio
+import os
 
 
 class GroupChatLogic:
@@ -30,6 +31,12 @@ class GroupChatLogic:
         # Kết nối tín hiệu từ UI với wrapper sync function
         self.ui.group_selected.connect(self._handle_group_selected_sync)
         self.ui.message_send_requested.connect(self.send_message)
+        
+        # Connect file send signal if available
+        if hasattr(self.ui, 'file_send_requested'):
+            self.ui.file_send_requested.connect(
+                lambda file_data: asyncio.create_task(self.send_file_message(file_data))
+            )
         
         # Connect real-time group message signals
         self._connect_realtime_signals()
@@ -284,6 +291,61 @@ class GroupChatLogic:
             await self.load_initial_messages()
         else:
             QMessageBox.warning(self.ui, "Lỗi", "Không thể gửi tin nhắn")
+
+    async def send_file_message(self, file_data):
+        """Send file message with optional caption"""
+        try:
+            print(f"[DEBUG][GroupChatLogic] send_file_message called: file_data={file_data}")
+
+            if not self.current_group:
+                QMessageBox.warning(self.ui, "Lỗi", "Vui lòng chọn nhóm trước")
+                return
+
+            file_path = file_data.get('file_path')
+            file_type = file_data.get('file_type')
+            caption = file_data.get('caption', '')
+
+            if not file_path or not os.path.exists(file_path):
+                print(f"[ERROR][GroupChatLogic] File not found: {file_path}")
+                QMessageBox.warning(self.ui, "Lỗi", "File không tồn tại")
+                return
+
+            # Upload file and get metadata
+            try:
+                # For now, use fallback: send as text with file info
+                file_name = os.path.basename(file_path)
+                file_info = f"📎 Sent file: {file_name}"
+                if caption:
+                    file_info += f"\n{caption}"
+
+                resp = await asyncio.wait_for(
+                    self.api_client.send_group_message(
+                        self.user_id,
+                        self.current_group["group_id"],
+                        file_info
+                    ),
+                    timeout=10.0
+                )
+
+                if resp and resp.get("success"):
+                    # Reset lazy loading state và reload từ đầu
+                    self.total_messages_loaded = 0
+                    self.has_more_messages = True
+                    self.is_loading_more = False
+                    await self.load_initial_messages()
+                    print(f"[DEBUG][GroupChatLogic] File message sent successfully")
+                else:
+                    error_msg = resp.get("message", "Không thể gửi file") if resp else "Không có phản hồi từ server"
+                    print(f"[DEBUG][GroupChatLogic] Failed to send file message: {error_msg}")
+                    QMessageBox.warning(self.ui, "Lỗi", error_msg)
+
+            except Exception as e:
+                print(f"[ERROR][GroupChatLogic] Failed to upload/send file: {e}")
+                QMessageBox.warning(self.ui, "Lỗi", f"Không thể gửi file: {str(e)}")
+
+        except Exception as e:
+            print(f"[ERROR][GroupChatLogic] send_file_message error: {e}")
+            QMessageBox.warning(self.ui, "Lỗi", f"Lỗi khi gửi file: {str(e)}")
 
     # ---------------------------
     # Quản lý nhóm

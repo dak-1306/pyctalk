@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, QTimer
 
 # Giữ nguyên import API + Logic như bản cũ
 from client.Group_chat.group_api_client import GroupAPIClient
@@ -16,10 +16,15 @@ logger = logging.getLogger(__name__)
 class EmbeddedGroupChatWidget(QtWidgets.QWidget):
     # Signals should be declared at class level
     message_send_requested = QtCore.pyqtSignal(str)
+    file_send_requested = QtCore.pyqtSignal(dict)  # Thêm signal cho file sending
     group_selected = QtCore.pyqtSignal(dict)
+    back_clicked = QtCore.pyqtSignal()  # Thêm signal cho back button
 
     def __init__(self, client, user_id, username, group_data):
         super().__init__()
+        # Set object name for CSS specificity
+        self.setObjectName("EmbeddedGroupChatWidget")
+        
         # --- giữ logic cũ ---
         self.api_client = GroupAPIClient(client)
         self.logic = GroupChatLogic(self, self.api_client, user_id, username)
@@ -32,6 +37,11 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.last_message_sender = None
         self.message_count = 0
         self.time_formatter = TimeFormatter()
+
+        # File selection tracking
+        self.selected_file_path = None
+        self.selected_file_type = None
+        self.current_file_preview = None
 
         # Track theme mode
         self.is_dark_mode = False
@@ -188,75 +198,104 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         # Setup responsive design
         self._setup_responsive_design()
 
-        # Hiển thị tên nhóm với button quản lý - Header Bar
+        # Hiển thị tên nhóm với button quản lý - Header Bar (đồng bộ với chat 1-1)
         group_header_layout = QtWidgets.QHBoxLayout()
-        group_header_layout.setContentsMargins(16, 12, 16, 12)
-        
-        self.group_info_label = QtWidgets.QLabel()
+        group_header_layout.setContentsMargins(20, 0, 20, 0)
+        group_header_layout.setSpacing(15)
+
+        # Back button (cho consistency với chat 1-1)
+        self.back_btn = QtWidgets.QPushButton("←")
+        self.back_btn.setFixedSize(40, 40)
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+        """)
+        self.back_btn.clicked.connect(self._on_back_clicked)
+        group_header_layout.addWidget(self.back_btn)
+
+        # Group avatar (circle với initial)
+        group_initial = self.group_data.get('name', 'Group')[0].upper()
+        group_avatar = QtWidgets.QLabel(group_initial)
+        group_avatar.setFixedSize(50, 50)
+        group_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        group_avatar.setStyleSheet("""
+            QLabel {
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border-radius: 25px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+        """)
+        group_header_layout.addWidget(group_avatar)
+
+        self.group_info_label = QtWidgets.QLabel(self.group_data.get('name', 'Group'))
         self.group_info_label.setStyleSheet("""
             QLabel {
-                font-weight: bold; 
-                font-size: 16px;
-                color: #1a1a1a;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
                 padding: 0px;
             }
         """)
-        self.update_group_info()
         group_header_layout.addWidget(self.group_info_label)
-        
-        # Button quản lý nhóm
-        self.manage_group_btn = QtWidgets.QPushButton("⚙️ Quản lý")
-        self.manage_group_btn.setMaximumWidth(100)
-        self.manage_group_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0084FF;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: 600;
-                min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #0073E6;
-            }
-            QPushButton:pressed {
-                background-color: #005CBF;
-            }
-        """)
-        self.manage_group_btn.clicked.connect(self.open_group_management)
-        group_header_layout.addWidget(self.manage_group_btn)
-        
-        # Theme toggle button
+
+        group_header_layout.addStretch()
+
+        # Theme toggle button (giữ lại tính năng nâng cao)
         self.theme_toggle_btn = QtWidgets.QPushButton("🌙")
-        self.theme_toggle_btn.setFixedSize(36, 36)
+        self.theme_toggle_btn.setFixedSize(40, 40)
         self.theme_toggle_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
-                color: #666666;
+                color: white;
                 border: none;
-                border-radius: 18px;
+                border-radius: 20px;
                 font-size: 16px;
-                padding: 0px;
             }
             QPushButton:hover {
-                background-color: #f7f8fa;
-            }
-            QPushButton:pressed {
-                background-color: #e4e6ea;
+                background-color: rgba(255, 255, 255, 0.1);
             }
         """)
         self.theme_toggle_btn.clicked.connect(self.toggle_theme)
         self.theme_toggle_btn.setToolTip("Chuyển đổi chế độ sáng/tối")
         group_header_layout.addWidget(self.theme_toggle_btn)
-        
+
+        # Group management button
+        self.manage_group_btn = QtWidgets.QPushButton("⚙️")
+        self.manage_group_btn.setFixedSize(40, 40)
+        self.manage_group_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+        """)
+        self.manage_group_btn.clicked.connect(self.open_group_management)
+        self.manage_group_btn.setToolTip("Quản lý nhóm")
+        group_header_layout.addWidget(self.manage_group_btn)
+
         group_header_widget = QtWidgets.QWidget()
+        group_header_widget.setFixedHeight(75)  # Đồng bộ height với chat 1-1
         group_header_widget.setLayout(group_header_layout)
         group_header_widget.setStyleSheet("""
             QWidget {
-                background-color: #ffffff;
-                border-bottom: 1px solid #e4e6ea;
+                background-color: #667eea;  /* Đồng bộ màu với chat 1-1 */
+                border-bottom: 1px solid #e1e5e9;
             }
         """)
         layout.addWidget(group_header_widget)
@@ -308,8 +347,8 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
 
         self.messages_widget = QtWidgets.QWidget()
         self.messages_layout = QtWidgets.QVBoxLayout(self.messages_widget)
-        self.messages_layout.setContentsMargins(16, 12, 16, 12)
-        self.messages_layout.setSpacing(4)  # Spacing nhỏ hơn cho bubble gần nhau
+        self.messages_layout.setContentsMargins(10, 10, 10, 10)  # Đồng bộ với chat 1-1
+        self.messages_layout.setSpacing(8)  # Đồng bộ spacing với chat 1-1
         # Stretch để các bubble dồn lên trên, chừa chỗ cuối
         self.messages_layout.addStretch()
         
@@ -320,12 +359,12 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 border: none;
                 background-color: transparent;
                 text-align: center;
-                height: 2px;
+                height: 3px;  /* Đồng bộ height với chat 1-1 */
                 border-radius: 1px;
                 margin: 0px;
             }
             QProgressBar::chunk {
-                background-color: #0084ff;
+                background-color: #667eea;  /* Đồng bộ màu với chat 1-1 */
                 border-radius: 1px;
             }
         """)
@@ -354,10 +393,15 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 padding: 0px;
             }
         """)
-        
+
+        # File preview area
+        self.file_preview_area = QtWidgets.QWidget()
+        self.file_preview_layout = QtWidgets.QVBoxLayout(self.file_preview_area)
+        self.file_preview_area.hide()
+
         input_layout = QtWidgets.QHBoxLayout(input_container)
-        input_layout.setContentsMargins(16, 12, 16, 12)
-        input_layout.setSpacing(8)
+        input_layout.setContentsMargins(5, 5, 5, 5)  # Đồng bộ với chat 1-1
+        input_layout.setSpacing(5)  # Đồng bộ spacing với chat 1-1
 
         # Emoji button
         self.emoji_button = QtWidgets.QPushButton("😊")
@@ -380,8 +424,18 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.emoji_button.clicked.connect(self._show_emoji_picker)
         input_layout.addWidget(self.emoji_button)
 
+        # File upload widget (đồng bộ với chat 1-1)
+        try:
+            from client.UI.messenger_ui.file_upload_widget import FileUploadWidget
+            self.file_upload = FileUploadWidget()
+            self.file_upload.file_selected.connect(self._on_file_selected)
+            input_layout.addWidget(self.file_upload)
+        except ImportError as e:
+            print(f"[WARNING][GroupChat] Could not import FileUploadWidget: {e}")
+            self.file_upload = None
+
         self.message_input = QtWidgets.QLineEdit()
-        self.message_input.setPlaceholderText("Nhập tin nhắn...")
+        self.message_input.setPlaceholderText("Type a message...")  # Đồng bộ với chat 1-1
         self.message_input.setStyleSheet("""
             QLineEdit {
                 background-color: #f7f8fa;
@@ -418,24 +472,24 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.typing_indicator.hide()
 
         self.send_button = QtWidgets.QPushButton("➤")
-        self.send_button.setFixedSize(36, 36)
+        self.send_button.setFixedSize(40, 35)  # Đồng bộ size với chat 1-1
         self.send_button.setStyleSheet("""
             QPushButton {
-                background-color: #bcc0c4;
+                background-color: #0084ff;  /* Đồng bộ màu với chat 1-1 */
                 color: white;
                 border: none;
-                border-radius: 18px;
+                border-radius: 17px;  /* Đồng bộ border-radius */
                 font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #0073E6;
+                background-color: #0066cc;  /* Đồng bộ hover color */
             }
             QPushButton:pressed {
-                background-color: #005CBF;
+                background-color: #004499;  /* Đồng bộ pressed color */
             }
             QPushButton:disabled {
-                background-color: #bcc0c4;
+                background-color: #cccccc;  /* Màu xám nhạt hơn khi disabled */
             }
         """)
         self.send_button.clicked.connect(self._on_send_message)
@@ -444,6 +498,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         input_layout.addWidget(self.message_input, stretch=1)
         input_layout.addWidget(self.typing_indicator)
         input_layout.addWidget(self.send_button)
+        layout.addWidget(self.file_preview_area)
         layout.addWidget(input_container)
     
     def _setup_scroll_loading(self):
@@ -905,11 +960,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 }
                 QPushButton:hover {
                     background-color: #0073E6;
-                    transform: scale(1.05);
                 }
                 QPushButton:pressed {
                     background-color: #005CBF;
-                    transform: scale(0.95);
                 }
             """)
         else:
@@ -980,16 +1033,25 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             self._typing_timer.stop()
 
     def update_group_info(self):
-        """Cập nhật thông tin nhóm hiển thị"""
+        """Cập nhật thông tin nhóm hiển thị - Đã được cập nhật để đồng bộ với chat 1-1"""
         if self.group_data:
-            group_name = self.group_data.get("group_name", "Unknown Group")
-            group_id = self.group_data.get("group_id", "?")
-            self.group_info_label.setText(f"Nhóm: {group_name} (ID: {group_id})")
+            group_name = self.group_data.get("name", "Unknown Group")
+            self.group_info_label.setText(group_name)  # Chỉ hiển thị tên nhóm, không có ID
+
+    def _on_back_clicked(self):
+        """Handle back button click - đồng bộ với chat 1-1"""
+        # Emit signal để parent widget xử lý việc quay lại
+        self.back_clicked.emit()
+        print("[DEBUG][GroupChat] Back button clicked")
 
     def _on_send_message(self):
-        """Xử lý gửi tin nhắn"""
+        """Xử lý gửi tin nhắn hoặc file"""
         content = self.message_input.text().strip()
-        if content:
+
+        # If file is selected, send file message
+        if hasattr(self, 'selected_file_path') and self.selected_file_path:
+            self._send_file_message()
+        elif content:
             asyncio.create_task(self._send_message_async(content))
 
     async def _send_message_async(self, content):
@@ -1021,6 +1083,72 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             error_msg = response.get("message", "Không thể gửi tin nhắn") if response else "Không có phản hồi từ server"
             print(f"[DEBUG] Failed to send message: {error_msg}")
             QtWidgets.QMessageBox.warning(self, "Lỗi", error_msg)
+
+    def _on_file_selected(self, file_path, file_type):
+        """Handle file selection from upload widget"""
+        print(f"[DEBUG][EmbeddedGroupChat] File selected: {file_path}, type: {file_type}")
+        self.selected_file_path = file_path
+        self.selected_file_type = file_type
+        self._show_file_preview(file_path, file_type)
+
+    def _show_file_preview(self, file_path, file_type):
+        """Show preview of selected file"""
+        try:
+            from UI.messenger_ui.file_upload_widget import FilePreviewWidget
+
+            # Remove existing preview
+            if self.current_file_preview:
+                self.file_preview_layout.removeWidget(self.current_file_preview)
+                self.current_file_preview.deleteLater()
+
+            # Create new preview
+            self.current_file_preview = FilePreviewWidget(file_path, file_type)
+            self.current_file_preview.remove_file.connect(self._remove_file_preview)
+            self.file_preview_layout.addWidget(self.current_file_preview)
+
+            # Show preview area
+            self.file_preview_area.show()
+
+        except ImportError as e:
+            print(f"[WARNING][EmbeddedGroupChat] Could not import FilePreviewWidget: {e}")
+
+    def _remove_file_preview(self):
+        """Remove file preview and reset selection"""
+        if self.current_file_preview:
+            self.file_preview_layout.removeWidget(self.current_file_preview)
+            self.current_file_preview.deleteLater()
+            self.current_file_preview = None
+
+        # Hide preview area
+        self.file_preview_area.hide()
+
+        # Reset file selection
+        self.selected_file_path = None
+        self.selected_file_type = None
+        if hasattr(self, 'file_upload') and self.file_upload:
+            self.file_upload.reset()
+
+    def _send_file_message(self):
+        """Send file message with optional text caption"""
+        if not self.selected_file_path:
+            return
+
+        text_caption = self.message_input.text().strip()
+        print(f"[DEBUG][EmbeddedGroupChat] Sending file: {self.selected_file_path} with caption: '{text_caption}'")
+
+        # Create message data for file
+        message_data = {
+            'file_path': self.selected_file_path,
+            'file_type': self.selected_file_type,
+            'caption': text_caption
+        }
+
+        # Emit file send signal
+        self.file_send_requested.emit(message_data)
+
+        # Clear input and preview
+        self.message_input.clear()
+        self._remove_file_preview()
 
     def _add_message_bubble(self, message, is_sent, timestamp=None):
         """Helper method for adding message bubbles"""

@@ -61,6 +61,22 @@ class MessageBubble(QtWidgets.QWidget):
         main_layout.setContentsMargins(8, 4, 8, 4)
         main_layout.setSpacing(3)
         
+        # Set object name for specific styling
+        self.setObjectName("MessageBubbleWidget")
+        
+        # Set widget background to transparent with higher specificity
+        self.setStyleSheet("""
+            #MessageBubbleWidget {
+                background-color: transparent !important;
+            }
+            #MessageBubbleWidget QWidget {
+                background-color: transparent !important;
+            }
+            #MessageBubbleWidget QLabel {
+                background-color: transparent !important;
+            }
+        """)
+        
         # Hiển thị tên người gửi nếu cần (chỉ cho tin nhắn nhận được)
         if not self.is_sent and self.show_sender_name and self.sender_name:
             sender_label = QtWidgets.QLabel(f"{self.sender_name}")
@@ -72,12 +88,6 @@ class MessageBubble(QtWidgets.QWidget):
                     margin-left: 44px;
                     margin-bottom: 2px;
                     padding: 0px;
-                    selection-background-color: rgba(0, 132, 255, 0.1);
-                    selection-color: #0084FF;
-                }
-                QLabel:hover {
-                    color: #0073E6;
-                    text-decoration: underline;
                 }
             """)
             sender_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -132,8 +142,6 @@ class MessageBubble(QtWidgets.QWidget):
                     padding: 10px 14px;
                     font-size: 14px;
                     line-height: 1.4;
-                    selection-background-color: rgba(255, 255, 255, 0.3);
-                    selection-color: white;
                 }
             """)
             bubble_widget.setMaximumWidth(320)
@@ -147,8 +155,6 @@ class MessageBubble(QtWidgets.QWidget):
                     font-size: 14px;
                     line-height: 1.4;
                     border: 1px solid #e4e6ea;
-                    selection-background-color: rgba(0, 132, 255, 0.2);
-                    selection-color: #1a1a1a;
                 }
             """)
             bubble_widget.setMaximumWidth(320)
@@ -182,13 +188,10 @@ class MessageBubble(QtWidgets.QWidget):
                         color: #8E8E93;
                         font-size: 11px;
                         margin: 2px 0;
-                        padding: 2px 4px;
+                        padding: 0;
+                        background-color: transparent !important;
                         selection-background-color: transparent;
                         selection-color: #8E8E93;
-                    }
-                    QLabel:hover {
-                        color: #65676B;
-                        background-color: transparent;
                     }
                 """)
                 
@@ -221,8 +224,7 @@ class MessageBubble(QtWidgets.QWidget):
         avatar.setFixedSize(32, 32)
         avatar.setStyleSheet("""
             QLabel {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #ff7eb3, stop:1 #ff758c);
+                background-color: #0084FF;
                 color: white;
                 border-radius: 16px;
                 font-size: 14px;
@@ -259,6 +261,9 @@ class MessageBubble(QtWidgets.QWidget):
                 font-size: 10px;
                 margin: 2px 0;
                 padding: 0;
+                background-color: transparent !important;
+                selection-background-color: transparent;
+                selection-color: {status_color};
             }}
         """)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -276,6 +281,9 @@ class MessageBubble(QtWidgets.QWidget):
                         font-size: 10px;
                         margin: 2px 0;
                         padding: 0;
+                        background-color: transparent !important;
+                        selection-background-color: transparent;
+                        selection-color: #007AFF;
                     }
                 """)
             else:
@@ -286,6 +294,9 @@ class MessageBubble(QtWidgets.QWidget):
                         font-size: 10px;
                         margin: 2px 0;
                         padding: 0;
+                        background-color: transparent !important;
+                        selection-background-color: transparent;
+                        selection-color: #8E8E93;
                     }
                 """)
     
@@ -328,6 +339,10 @@ class MessageBubble(QtWidgets.QWidget):
                         color: #8E8E93;
                         font-size: 11px;
                         margin: 2px 0;
+                        padding: 0;
+                        background-color: transparent !important;
+                        selection-background-color: transparent;
+                        selection-color: #8E8E93;
                     }
                 """)
                 
@@ -341,20 +356,5 @@ class MessageBubble(QtWidgets.QWidget):
     
     def _on_bubble_hover(self, is_hovering):
         """Handle bubble hover effect - tinh tế hơn"""
-        if is_hovering:
-            # Add very subtle shadow effect on hover
-            if self.is_sent:
-                self.setStyleSheet("""
-                    MessageBubble {
-                        background-color: rgba(0, 132, 255, 0.03);
-                    }
-                """)
-            else:
-                self.setStyleSheet("""
-                    MessageBubble {
-                        background-color: rgba(0, 0, 0, 0.01);
-                    }
-                """)
-        else:
-            # Remove hover effect
-            self.setStyleSheet("")
+        # Remove hover background effects to keep clean look
+        pass

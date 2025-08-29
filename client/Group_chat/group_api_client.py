@@ -48,6 +48,15 @@ class GroupAPIClient:
             "content": content  # Server expects content
         })
 
+    async def send_group_file_message(self, sender_id: str, group_id: str, file_metadata: dict, caption: str = ""):
+        """Send file message to group"""
+        return await self._send("send_group_file_message", {
+            "sender_id": sender_id,
+            "group_id": group_id,
+            "file_metadata": file_metadata,
+            "caption": caption
+        })
+
     async def get_friends(self, user_id: str):
         return await self._send("get_friends", {"user_id": user_id})
 
