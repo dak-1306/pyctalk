@@ -1139,10 +1139,16 @@ class Ui_MainWindow(QtCore.QObject):
                 )
                 self._logout_and_show_login()
                 return
-                
-            self.logout_handler = LogoutHandler(self.client, self.main_window)
-            # Gọi async logout
-            asyncio.create_task(self.logout_handler.logout(self.username))
+            
+            try:
+                self.logout_handler = LogoutHandler(self.client, self.main_window)
+                # Gọi async logout với error handling
+                task = asyncio.create_task(self.logout_handler.logout(self.username))
+                print(f"[DEBUG][Ui_MainWindow] Created logout task: {task}")
+            except Exception as logout_error:
+                logger.error(f"[Ui_MainWindow] Lỗi tạo logout task: {logout_error}")
+                # Fallback to simple logout
+                self._logout_and_show_login()
             
         except Exception as e:
             logger.error(f"[Ui_MainWindow] Lỗi đăng xuất: {e}")
@@ -1156,7 +1162,11 @@ class Ui_MainWindow(QtCore.QObject):
         """Chuyển về trang đăng nhập"""
         try:
             # Import ở đây để tránh circular import
-            from client.Login.login_signIn import LoginWindow
+            # Sử dụng path tuyệt đối để tránh lỗi import
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            from Login.login_signIn import LoginWindow
             
             # Tạo và hiện trang đăng nhập
             self.login_window = LoginWindow()
