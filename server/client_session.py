@@ -49,6 +49,7 @@ class ClientSession:
         print(f"🟢 Client {self.client_address} session started.")
         try:
             while self.running:
+                print(f"[DEBUG] Session loop running, self.running={self.running}")
                 # Increased timeout to 5 minutes and only check if client is inactive
                 if time.time() - self.last_ping_time > 300:  # 5 minutes instead of 1 minute
                     await self.handle_disconnect("Timeout - Không có ping từ client")
@@ -79,17 +80,27 @@ class ClientSession:
 
                 # Update ping time on successful message receive
                 self.last_ping_time = time.time()
+                print(f"[DEBUG] About to call handle_message for {self.client_address}")
                 await self.handle_message(message_data)
+                print(f"[DEBUG] handle_message completed for {self.client_address}, running={self.running}")
 
         except asyncio.IncompleteReadError:
+            print(f"[DEBUG] IncompleteReadError - Client closed connection")
             await self.handle_disconnect("Client đóng kết nối")
         except Exception as e:
+            print(f"[DEBUG] Exception in run loop: {e}")
+            import traceback
+            traceback.print_exc()
             await self.handle_disconnect(f"Lỗi: {e}")
         finally:
+            print(f"[DEBUG] run() method ending, calling cleanup")
             await self.cleanup()
 
     async def handle_disconnect(self, reason):
         print(f"⛔ Client {self.client_address} disconnected. Lý do: {reason}")
+        import traceback
+        print(f"[DEBUG] Disconnect called from:")
+        traceback.print_stack()
         self.running = False
 
     async def cleanup(self):
@@ -110,7 +121,7 @@ class ClientSession:
         except Exception as e:
             print(f"⚠️ Lỗi khi đóng writer {self.client_address}: {e}")
 
-    async def send_response(self, response_dict, request_id=None):
+    async def send_response(self, response_dict, request_id=None, is_logout=False):
         try:
             # Thêm request_id vào response nếu có
             if request_id:
@@ -123,7 +134,11 @@ class ClientSession:
             print(f"[DEBUG] Response sent successfully to {self.client_address}")
         except Exception as e:
             print(f"❌ Không gửi được phản hồi cho {self.client_address}: {e}")
-            self.running = False
+            # Do NOT close connection for logout response send failures
+            if not is_logout:
+                self.running = False
+            else:
+                print(f"[DEBUG] Logout response send failed, but keeping connection alive")
 
     async def handle_message(self, raw_data):
         request_id = None  # Initialize request_id at top level
@@ -166,7 +181,13 @@ class ClientSession:
                 self.running = False
 
             elif action == "logout":
+                print(f"[DEBUG][ClientSession] ======= LOGOUT START =======")
+                print(f"[DEBUG][ClientSession] Processing logout for user: {data['data'].get('username')}")
+                print(f"[DEBUG][ClientSession] Current logged_in_username: {self.logged_in_username}")
+                print(f"[DEBUG][ClientSession] Current running state: {self.running}")
+                
                 if self.chat1v1_handler and self.logged_in_username:
+                    print(f"[DEBUG][ClientSession] Unregistering from chat handler...")
                     # Use session_id for precise cleanup
                     self.chat1v1_handler.unregister_user_connection(
                         self.logged_in_username, 
@@ -174,8 +195,57 @@ class ClientSession:
                         session_id=getattr(self, 'session_id', None)
                     )
                     print(f"[Chat1v1] Unregistered connection for {self.logged_in_username} - Session: {self.client_address}")
-                await self.send_response({"success": True, "message": "Đăng xuất thành công."}, request_id)
-                self.running = False
+                
+                # Clear user session data but keep connection alive
+                old_username = self.logged_in_username
+                self.logged_in_username = None
+                self.logged_in_user_id = None
+                print(f"[ClientSession] User {old_username} logged out, session cleared but connection maintained")
+                
+                # Send logout response with special flag to keep connection alive even if send fails
+                print(f"[DEBUG][ClientSession] Sending logout response, keeping connection alive")
+                await self.send_response({"success": True, "message": "Đăng xuất thành công."}, request_id, is_logout=True)
+                print(f"[DEBUG][ClientSession] Logout response sent, connection should remain alive")
+                print(f"[DEBUG][ClientSession] Final running state: {self.running}")
+                print(f"[DEBUG][ClientSession] ======= LOGOUT END =======")
+                # Do NOT set self.running = False - keep connection alive for re-login
+
+            elif action == "switch_user":
+                try:
+                    print(f"[DEBUG][ClientSession] ======= SWITCH_USER START =======")
+                    print(f"[DEBUG][ClientSession] Processing switch_user for user: {data['data'].get('username')}")
+                    
+                    # Simplified logic - just clear session without complex operations
+                    old_username = self.logged_in_username
+                    self.logged_in_username = None
+                    self.logged_in_user_id = None
+                    print(f"[ClientSession] User {old_username} switched user, session cleared")
+                    
+                    # Send simple response
+                    print(f"[DEBUG][ClientSession] Sending switch_user response")
+                    await self.send_response({"success": True, "message": "Chuyển user thành công."}, request_id)
+                    print(f"[DEBUG][ClientSession] Switch_user response sent successfully")
+                    print(f"[DEBUG][ClientSession] ======= SWITCH_USER END =======")
+                except Exception as switch_user_error:
+                    print(f"[ERROR][ClientSession] Switch user failed: {switch_user_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Send error response but keep connection alive
+                    try:
+                        await self.send_response({"success": False, "message": f"Switch user error: {switch_user_error}"}, request_id)
+                    except Exception as response_error:
+                        print(f"[ERROR] Failed to send error response: {response_error}")
+                    # Do NOT set self.running = False even on error
+
+            elif action == "test_connection":
+                print(f"[DEBUG][ClientSession] ======= TEST_CONNECTION =======")
+                print(f"[DEBUG][ClientSession] Simple test action received")
+                try:
+                    await self.send_response({"success": True, "message": "Test connection OK"}, request_id)
+                    print(f"[DEBUG][ClientSession] Test response sent successfully")
+                except Exception as test_error:
+                    print(f"[ERROR] Test connection error: {test_error}")
+                print(f"[DEBUG][ClientSession] ======= TEST_CONNECTION END =======")
 
             elif action == "get_friends":
                 username = data["data"]["username"]

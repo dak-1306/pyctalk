@@ -10,11 +10,18 @@ from client.Request.handle_request_client import AsyncPycTalkClient
 
 
 class LoginWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, existing_client=None):
         super().__init__()
         self.ui = Ui_LoginWindow()
         self.ui.setupUi(self)
-        self.client = AsyncPycTalkClient()
+        
+        # Use existing client if provided, otherwise create new one
+        if existing_client:
+            self.client = existing_client
+            print(f"[DEBUG][LoginWindow] Reusing existing client connection")
+        else:
+            self.client = AsyncPycTalkClient()
+            print(f"[DEBUG][LoginWindow] Created new client connection")
 
         # Kết nối nút login (async)
         self.ui.btnLogin.clicked.connect(lambda: asyncio.create_task(self.handle_login()))
@@ -32,11 +39,18 @@ class LoginWindow(QtWidgets.QMainWindow):
             QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập đầy đủ username và password")
             return
 
-
-
-        if not await self.client.connect():
-            QMessageBox.critical(self, "Lỗi", "Không thể kết nối đến server")
-            return
+        # Check if connection is still alive from logout
+        connection_alive = (hasattr(self.client, 'writer') and self.client.writer and 
+                          not self.client.writer.is_closing() and 
+                          hasattr(self.client, 'running') and self.client.running)
+        
+        if connection_alive:
+            print(f"[DEBUG][LoginWindow] Reusing existing connection (from logout)")
+        else:
+            print(f"[DEBUG][LoginWindow] Creating new connection to server...")
+            if not await self.client.connect():
+                QMessageBox.critical(self, "Lỗi", "Không thể kết nối đến server")
+                return
 
         request = {
             "action": "login",
