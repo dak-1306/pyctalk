@@ -179,6 +179,19 @@ class ChatWindow(QtWidgets.QWidget):
             count_after = self.messages_layout.count()
             print(f"[DEBUG][ChatWindow] Layout count after insert: {count_after}")
             
+            # Force widget updates và visibility
+            bubble.setVisible(True)
+            bubble.show()
+            
+            # Force layout updates
+            self.messages_layout.update()
+            self.messages_widget.updateGeometry()
+            self.scroll_area.updateGeometry()
+            
+            # Force repaint
+            bubble.repaint()
+            self.messages_widget.repaint()
+            
             # Debug widget properties
             print(f"[DEBUG][ChatWindow] Bubble visible: {bubble.isVisible()}")
             print(f"[DEBUG][ChatWindow] Bubble size: {bubble.size()}")
@@ -194,10 +207,6 @@ class ChatWindow(QtWidgets.QWidget):
             print(f"[DEBUG][ChatWindow] Bubble geometry: {bubble.geometry()}")
             print(f"[DEBUG][ChatWindow] Messages widget geometry: {self.messages_widget.geometry()}")
             print(f"[DEBUG][ChatWindow] Scroll area geometry: {self.scroll_area.geometry()}")
-            
-            # Force visibility cho toàn bộ chain
-            bubble.setVisible(True)
-            bubble.show()
             self.messages_widget.setVisible(True) 
             self.messages_widget.show()
             self.scroll_area.setVisible(True)

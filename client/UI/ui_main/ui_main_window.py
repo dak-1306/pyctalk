@@ -187,23 +187,34 @@ class Ui_MainWindow(QtCore.QObject):
                 print(f"[ERROR][MainWindow] Unexpected error with chat window: {e}")
                 del self.chat_windows_cache[self.current_chat_friend_id]
         
-        # Kiểm tra cache, nếu đã có thì dùng lại
+        # Kiểm tra cache, nếu đã có thì dùng lại (nhưng tạo connection mới)
         if friend_id in self.chat_windows_cache:
             try:
                 chat_window, api_client = self.chat_windows_cache[friend_id]
                 # Test widget validity
                 chat_window.isVisible()  # This will raise RuntimeError if deleted
                 
-                # Sử dụng logic đã có trong cache và reconnect signals
-                chat_window.logic = api_client.logic
-                api_client.logic.reconnect_ui_signals()
-                # Set parent lại trước khi add vào layout
-                chat_window.setParent(self.central_widget)
+                # Tạo new API client để tránh connection conflict
+                from client.Chat1_1.chat1v1_api_client import Chat1v1APIClient
+                new_api_client = Chat1v1APIClient(self.client)
+                
+                # Tạo new logic instance để avoid conflicts
+                from client.Chat1_1.chat1v1_logic import Chat1v1Logic
+                current_user_id = chat_data.get('current_user_id', self.user_id)
+                new_logic = Chat1v1Logic(chat_window, new_api_client, current_user_id, friend_id)
+                chat_window.logic = new_logic
+                
+                # Update cache với new instances
+                self.chat_windows_cache[friend_id] = (chat_window, new_api_client)
+                
+                print(f"[DEBUG][MainWindow] Reusing cached chat window for friend_id={friend_id} with new connections")
+                chat_window.setParent(self.centralwidget)
                 self.main_layout.addWidget(chat_window)
                 chat_window.show()
-                # Force show all message bubbles when restoring from cache
-                if hasattr(chat_window, '_force_show_all_messages'):
-                    chat_window._force_show_all_messages()
+                
+                # Load message history for reused window
+                asyncio.create_task(new_logic.load_message_history())
+                
                 print(f"[DEBUG][MainWindow] Reused cached chat window for friend_id={friend_id}")
                 return  # Successfully reused cached window
             except RuntimeError as e:
@@ -240,6 +251,7 @@ class Ui_MainWindow(QtCore.QObject):
             chat_window.show()
             
         self.current_chat_friend_id = friend_id
+        print(f"[DEBUG][MainWindow] Successfully opened chat window for friend_id={friend_id}")
 
     def _handle_chat_friend_from_sidebar(self, friend_data):
         """Handle chat request from sidebar friends management"""

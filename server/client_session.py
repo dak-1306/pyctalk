@@ -17,7 +17,8 @@ class ClientSession:
         
         # User login info
         self.logged_in_username = None
-        self.logged_in_user_id = None        # Friend handler
+        self.logged_in_user_id = None
+        self.session_id = None  # Track session ID for proper cleanup        # Friend handler
         try:
             from Handle_AddFriend.friend_handle import friend_handler
             self.friend_handler = friend_handler
@@ -48,13 +49,19 @@ class ClientSession:
         print(f"🟢 Client {self.client_address} session started.")
         try:
             while self.running:
-                # timeout ping
-                if time.time() - self.last_ping_time > 60:
+                # Increased timeout to 5 minutes and only check if client is inactive
+                if time.time() - self.last_ping_time > 300:  # 5 minutes instead of 1 minute
                     await self.handle_disconnect("Timeout - Không có ping từ client")
                     break
 
-                # đọc 4 byte length prefix
-                length_prefix = await self.reader.readexactly(4)
+                # đọc 4 byte length prefix với timeout
+                try:
+                    length_prefix = await asyncio.wait_for(self.reader.readexactly(4), timeout=30.0)
+                except asyncio.TimeoutError:
+                    # Update ping time and continue - don't disconnect on read timeout
+                    self.last_ping_time = time.time()
+                    continue
+                
                 if not length_prefix:
                     await self.handle_disconnect("Không nhận được độ dài thông điệp")
                     break
@@ -70,6 +77,8 @@ class ClientSession:
                     await self.handle_disconnect("Không nhận được dữ liệu nào")
                     break
 
+                # Update ping time on successful message receive
+                self.last_ping_time = time.time()
                 await self.handle_message(message_data)
 
         except asyncio.IncompleteReadError:
@@ -85,13 +94,18 @@ class ClientSession:
 
     async def cleanup(self):
         try:
-            # Unregister from chat handler if logged in
+            # Unregister from chat handler if logged in - use session_id for precise cleanup
             if self.chat1v1_handler and self.logged_in_username:
-                self.chat1v1_handler.unregister_user_connection(self.logged_in_username, self.logged_in_user_id)
-                print(f"[Chat1v1] Unregistered {self.logged_in_username} on cleanup")
+                self.chat1v1_handler.unregister_user_connection(
+                    self.logged_in_username, 
+                    self.logged_in_user_id,
+                    session_id=getattr(self, 'session_id', None)
+                )
+                print(f"[Chat1v1] Unregistered {self.logged_in_username} on cleanup - Session: {self.client_address}")
                 
-            self.writer.close()
-            await self.writer.wait_closed()
+            if not self.writer.is_closing():
+                self.writer.close()
+                await self.writer.wait_closed()
             print(f"🔌 Đã đóng kết nối với {self.client_address}")
         except Exception as e:
             print(f"⚠️ Lỗi khi đóng writer {self.client_address}: {e}")
@@ -137,9 +151,9 @@ class ClientSession:
                         self.logged_in_username = username
                         self.logged_in_user_id = str(user_id)
                         
-                        # Register with both username and user_id for connection lookup
-                        self.chat1v1_handler.register_user_connection(username, str(user_id), self.writer)
-                        print(f"[Chat1v1] Registered real-time connection for {username} (ID: {user_id})")
+                        # Register with session-specific connection to avoid conflicts
+                        self.session_id = self.chat1v1_handler.register_user_connection(username, str(user_id), self.writer)
+                        print(f"[Chat1v1] Registered real-time connection for {username} (ID: {user_id}) - Session: {self.client_address}, Session ID: {self.session_id}")
                     except Exception as e:
                         print(f"[Chat1v1] Failed to register connection for {username}: {e}")
 
@@ -153,7 +167,13 @@ class ClientSession:
 
             elif action == "logout":
                 if self.chat1v1_handler and self.logged_in_username:
-                    self.chat1v1_handler.unregister_user_connection(self.logged_in_username, self.logged_in_user_id)
+                    # Use session_id for precise cleanup
+                    self.chat1v1_handler.unregister_user_connection(
+                        self.logged_in_username, 
+                        self.logged_in_user_id, 
+                        session_id=getattr(self, 'session_id', None)
+                    )
+                    print(f"[Chat1v1] Unregistered connection for {self.logged_in_username} - Session: {self.client_address}")
                 await self.send_response({"success": True, "message": "Đăng xuất thành công."}, request_id)
                 self.running = False
 

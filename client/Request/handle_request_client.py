@@ -62,6 +62,49 @@ class AsyncPycTalkClient(QObject):
         self._pending_requests = {}  # {request_id: callback}
         self._request_counter = 0
         self._listen_task = None
+        
+        # Auto-reconnect settings
+        self._auto_reconnect = False
+        self._login_credentials = {}
+        self._reconnect_attempts = 0
+        self._max_reconnect_attempts = 3
+
+    async def _attempt_reconnect(self):
+        """Attempt to reconnect automatically"""
+        if self._reconnect_attempts >= self._max_reconnect_attempts:
+            print(f"❌ Max reconnection attempts ({self._max_reconnect_attempts}) reached. Giving up.")
+            await self.disconnect()
+            return False
+            
+        self._reconnect_attempts += 1
+        print(f"🔄 Reconnection attempt {self._reconnect_attempts}/{self._max_reconnect_attempts}")
+        
+        # Wait before reconnecting
+        await asyncio.sleep(2)
+        
+        # Try to reconnect
+        if await self.connect():
+            # Try to re-login with saved credentials
+            if self._login_credentials:
+                print("🔑 Re-logging in with saved credentials...")
+                response = await self.login(
+                    self._login_credentials['username'],
+                    self._login_credentials['password']
+                )
+                if response and response.get("success"):
+                    print("✅ Reconnected and re-logged in successfully!")
+                    self._reconnect_attempts = 0  # Reset counter on success
+                    return True
+                else:
+                    print("❌ Failed to re-login after reconnection")
+                    return False
+            else:
+                print("✅ Reconnected successfully!")
+                self._reconnect_attempts = 0
+                return True
+        else:
+            print(f"❌ Reconnection attempt {self._reconnect_attempts} failed")
+            return False
 
     async def connect(self):
         try:
@@ -194,11 +237,21 @@ class AsyncPycTalkClient(QObject):
                     print(f"⚠️ Lỗi parse JSON: {e}. Data: {response_data}")
             except asyncio.IncompleteReadError:
                 print("⚠️ Server đóng kết nối.")
-                await self.disconnect()
+                # Try to reconnect automatically if we have login credentials
+                if hasattr(self, '_auto_reconnect') and self._auto_reconnect:
+                    print("🔄 Attempting to reconnect...")
+                    await self._attempt_reconnect()
+                else:
+                    await self.disconnect()
                 break
             except Exception as e:
                 print(f"❌ Lỗi khi nhận dữ liệu: {e}")
-                await self.disconnect()
+                # Try to reconnect for connection errors
+                if hasattr(self, '_auto_reconnect') and self._auto_reconnect and "connection" in str(e).lower():
+                    print("🔄 Attempting to reconnect...")
+                    await self._attempt_reconnect()
+                else:
+                    await self.disconnect()
                 break
 
     async def register(self, username, password, email):
@@ -222,6 +275,11 @@ class AsyncPycTalkClient(QObject):
     async def login(self, username, password):
         if not await self.connect():
             return
+            
+        # Save credentials for auto-reconnect
+        self._login_credentials = {'username': username, 'password': password}
+        self._auto_reconnect = True
+        
         request = {
             "action": "login",
             "data": {
@@ -235,8 +293,10 @@ class AsyncPycTalkClient(QObject):
             self.user_id = response.get("user_id")
             self.username = username
             self.start_ping()
+            self._reconnect_attempts = 0  # Reset on successful login
             return response
         else:
+            self._auto_reconnect = False  # Disable auto-reconnect on login failure
             await self.disconnect()
             return response
 

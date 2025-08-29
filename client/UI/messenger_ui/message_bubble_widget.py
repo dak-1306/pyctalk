@@ -56,24 +56,25 @@ class MessageBubble(QtWidgets.QWidget):
         super().mousePressEvent(event)
     
     def _setup_ui(self):
-        """Setup message bubble UI"""
+        """Setup message bubble UI với styling đẹp như Zalo/Messenger"""
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 2, 5, 2)
-        main_layout.setSpacing(2)
+        main_layout.setContentsMargins(8, 4, 8, 4)
+        main_layout.setSpacing(3)
         
         # Hiển thị tên người gửi nếu cần (chỉ cho tin nhắn nhận được)
         if not self.is_sent and self.show_sender_name and self.sender_name:
-            sender_label = QtWidgets.QLabel(f"👤 {self.sender_name}")
+            sender_label = QtWidgets.QLabel(f"{self.sender_name}")
             sender_label.setStyleSheet("""
                 QLabel {
                     color: #0084FF;
                     font-size: 12px;
-                    font-weight: bold;
-                    margin-left: 10px;
+                    font-weight: 600;
+                    margin-left: 44px;
                     margin-bottom: 2px;
+                    padding: 0px;
                 }
                 QLabel:hover {
-                    color: #006BB3;
+                    color: #0073E6;
                     text-decoration: underline;
                 }
             """)
@@ -82,70 +83,121 @@ class MessageBubble(QtWidgets.QWidget):
             sender_label.mousePressEvent = lambda event: self.sender_clicked.emit(self.sender_name)
             main_layout.addWidget(sender_label)
         
-        # Container cho bubble chính
-        bubble_layout = QtWidgets.QHBoxLayout()
-        bubble_layout.setContentsMargins(0, 0, 0, 0)
+        # Container cho bubble chính với avatar
+        bubble_container = QtWidgets.QHBoxLayout()
+        bubble_container.setContentsMargins(0, 0, 0, 0)
+        bubble_container.setSpacing(8)
+        
+        # Avatar cho tin nhắn nhận được
+        if not self.is_sent:
+            avatar_label = QtWidgets.QLabel()
+            avatar_label.setFixedSize(32, 32)
+            avatar_label.setStyleSheet("""
+                QLabel {
+                    background-color: #0084FF;
+                    border-radius: 16px;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: bold;
+                }
+            """)
+            # Hiển thị chữ cái đầu của tên
+            initial = self.sender_name[0].upper() if self.sender_name else "?"
+            avatar_label.setText(initial)
+            avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            bubble_container.addWidget(avatar_label, alignment=Qt.AlignmentFlag.AlignBottom)
         
         # Bubble chính
+        bubble_widget = QtWidgets.QWidget()
+        bubble_layout = QtWidgets.QVBoxLayout(bubble_widget)
+        bubble_layout.setContentsMargins(0, 0, 0, 0)
+        bubble_layout.setSpacing(0)
+        
         bubble = QtWidgets.QLabel()
         bubble.setText(self.message)
         bubble.setWordWrap(True)
-        bubble.setMinimumHeight(30)
-        bubble.setMaximumWidth(400)
+        bubble.setMinimumHeight(32)
+        bubble.setMaximumWidth(320)
+        bubble.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Minimum)
         
-        # Style cho bubble
+        # Style cho bubble với hiệu ứng đẹp
         if self.is_sent:
             bubble.setStyleSheet("""
                 QLabel {
                     background-color: #0084FF;
                     color: white;
-                    border-radius: 10px;
-                    padding: 8px 12px;
+                    border-radius: 18px;
+                    padding: 10px 14px;
                     font-size: 14px;
+                    line-height: 1.4;
                 }
             """)
-            bubble_layout.addStretch()
-            bubble_layout.addWidget(bubble)
+            bubble_widget.setMaximumWidth(320)
         else:
             bubble.setStyleSheet("""
                 QLabel {
-                    background-color: #F0F0F0;
-                    color: black;
-                    border-radius: 10px;
-                    padding: 8px 12px;
+                    background-color: #f1f3f4;
+                    color: #1a1a1a;
+                    border-radius: 18px;
+                    padding: 10px 14px;
                     font-size: 14px;
+                    line-height: 1.4;
+                    border: 1px solid #e4e6ea;
                 }
             """)
-            bubble_layout.addWidget(bubble)
-            bubble_layout.addStretch()
+            bubble_widget.setMaximumWidth(320)
         
-        main_layout.addLayout(bubble_layout)
+        bubble_layout.addWidget(bubble)
+        
+        # Thêm animation hover effect
+        bubble.enterEvent = lambda event: self._on_bubble_hover(True)
+        bubble.leaveEvent = lambda event: self._on_bubble_hover(False)
+        
+        # Căn chỉnh bubble
+        if self.is_sent:
+            bubble_container.addStretch()
+            bubble_container.addWidget(bubble_widget)
+        else:
+            bubble_container.addWidget(bubble_widget)
+            bubble_container.addStretch()
+        
+        main_layout.addLayout(bubble_container)
         
         # Hiển thị timestamp nếu cần
         if self.show_timestamp:
             timestamp_str = TimeFormatter.format_message_time(self.timestamp, show_time=True)
             if timestamp_str:
+                timestamp_container = QtWidgets.QHBoxLayout()
+                timestamp_container.setContentsMargins(0, 0, 0, 0)
+                
                 self.timestamp_label = QtWidgets.QLabel(timestamp_str)
                 self.timestamp_label.setStyleSheet("""
                     QLabel {
                         color: #8E8E93;
                         font-size: 11px;
                         margin: 2px 0;
+                        padding: 2px 4px;
                     }
                     QLabel:hover {
-                        color: #007AFF;
+                        color: #0084FF;
+                        background-color: #f7f8fa;
+                        border-radius: 8px;
                     }
                 """)
                 
                 # Align timestamp based on message direction
                 if self.is_sent:
-                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+                    timestamp_container.addStretch()
+                    timestamp_container.addWidget(self.timestamp_label)
                 else:
-                    self.timestamp_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                    # Offset để align với bubble (do có avatar)
+                    timestamp_container.addSpacing(40)
+                    timestamp_container.addWidget(self.timestamp_label)
+                    timestamp_container.addStretch()
                 
                 # Make timestamp clickable to toggle visibility
                 self.timestamp_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-                main_layout.addWidget(self.timestamp_label)
+                main_layout.addLayout(timestamp_container)
         
         # Add message status indicator for sent messages
         if self.is_sent:
@@ -279,3 +331,24 @@ class MessageBubble(QtWidgets.QWidget):
                 
                 self.layout().addWidget(self.timestamp_label)
                 self.show_timestamp = True
+    
+    def _on_bubble_hover(self, is_hovering):
+        """Handle bubble hover effect"""
+        if is_hovering:
+            # Add subtle shadow/glow effect on hover
+            if self.is_sent:
+                self.setStyleSheet("""
+                    MessageBubble {
+                        background-color: rgba(0, 132, 255, 0.05);
+                        border-radius: 8px;
+                    }
+                """)
+            else:
+                self.setStyleSheet("""
+                    MessageBubble {
+                        background-color: rgba(0, 0, 0, 0.02);
+                        border-radius: 8px;
+                    }
+                """)
+        else:
+            self.setStyleSheet("")

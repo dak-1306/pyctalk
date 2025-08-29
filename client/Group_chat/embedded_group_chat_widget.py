@@ -34,13 +34,24 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.time_formatter = TimeFormatter()
 
         self._setupUI()
+        
+        # Set overall widget styling
+        self.setStyleSheet("""
+            EmbeddedGroupChatWidget {
+                background-color: #ffffff;
+                border: none;
+            }
+        """)
 
-        # Thiết lập nhóm hiện tại và load tin nhắn như bản cũ
+        # Thiết lập nhóm hiện tại và load tin nhắn với lazy loading
         self.logic.current_group = group_data
-        asyncio.create_task(self.logic.load_group_messages())
+        asyncio.create_task(self.logic.load_initial_messages())
         
         # Load thông tin thành viên nhóm
         asyncio.create_task(self.load_group_members())
+        
+        # Setup scroll loading detection
+        self._setup_scroll_loading()
 
     def showEvent(self, event):
         """Reload tin nhắn khi widget được hiển thị lại (quay lại nhóm)"""
@@ -69,8 +80,8 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 user_in_group = any(int(member["user_id"]) == int(self.user_id) for member in members)
                 
                 if user_in_group:
-                    # User is still in group, safe to load messages
-                    await self.logic.load_group_messages(offset=0)
+                    # User is still in group, load with lazy loading
+                    await self.logic.load_initial_messages()
                     await self.load_group_members()
                 else:
                     print(f"[DEBUG] User {self.user_id} no longer in group {self.group_data.get('group_id')}")
@@ -136,18 +147,17 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             if last_item and last_item.spacerItem():
                 stretch_item = self.messages_layout.takeAt(layout_count - 1)
         
-        # Add the message bubble
+        # Add the message bubble với fade-in animation
         self.messages_layout.addWidget(bubble)
+        
+        # Add fade-in animation
+        self._animate_message_bubble(bubble)
         
         # Re-add the stretch item
         if stretch_item:
             self.messages_layout.addItem(stretch_item)
         else:
             self.messages_layout.addStretch()
-        
-        # Ensure bubble is visible
-        bubble.setVisible(True)
-        bubble.show()
         
         # Update layout
         self.messages_widget.updateGeometry()
@@ -165,16 +175,24 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.message_count = 0
 
     def _setupUI(self):
-        """Tạo UI layout"""
+        """Tạo UI layout với styling hiện đại như Zalo"""
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(0)
 
-        # Hiển thị tên nhóm với button quản lý
+        # Hiển thị tên nhóm với button quản lý - Header Bar
         group_header_layout = QtWidgets.QHBoxLayout()
+        group_header_layout.setContentsMargins(16, 12, 16, 12)
         
         self.group_info_label = QtWidgets.QLabel()
-        self.group_info_label.setStyleSheet("font-weight: bold; padding: 8px;")
+        self.group_info_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold; 
+                font-size: 16px;
+                color: #1a1a1a;
+                padding: 0px;
+            }
+        """)
         self.update_group_info()
         group_header_layout.addWidget(self.group_info_label)
         
@@ -183,19 +201,22 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.manage_group_btn.setMaximumWidth(100)
         self.manage_group_btn.setStyleSheet("""
             QPushButton {
-                background-color: #0078d4;
+                background-color: #0084FF;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                padding: 6px 12px;
-                font-size: 12px;
-                font-weight: bold;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                min-height: 20px;
             }
             QPushButton:hover {
-                background-color: #106ebe;
+                background-color: #0073E6;
+                transform: translateY(-1px);
             }
             QPushButton:pressed {
-                background-color: #005a9e;
+                background-color: #005CBF;
+                transform: translateY(0px);
             }
         """)
         self.manage_group_btn.clicked.connect(self.open_group_management)
@@ -203,52 +224,299 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         
         group_header_widget = QtWidgets.QWidget()
         group_header_widget.setLayout(group_header_layout)
+        group_header_widget.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-bottom: 1px solid #e4e6ea;
+            }
+        """)
         layout.addWidget(group_header_widget)
 
         # Hiển thị thông tin thành viên
         self.members_info_label = QtWidgets.QLabel()
         self.members_info_label.setStyleSheet("""
-            color: #666; 
-            padding: 4px 8px; 
-            font-size: 12px; 
-            border: 1px solid #ddd; 
-            border-radius: 4px; 
-            background-color: #f9f9f9;
+            QLabel {
+                color: #65676b; 
+                padding: 8px 16px; 
+                font-size: 12px; 
+                background-color: #f7f8fa;
+                border-bottom: 1px solid #e4e6ea;
+                margin: 0px;
+            }
         """)
         self.members_info_label.setText("Đang tải thông tin thành viên...")
         self.members_info_label.setWordWrap(True)
         layout.addWidget(self.members_info_label)
 
-        # Khu vực tin nhắn: ScrollArea + VBox (dùng MessageBubble)
+        # Khu vực tin nhắn: ScrollArea với styling đẹp
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #ffffff;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background-color: #f7f8fa;
+                width: 8px;
+                border-radius: 4px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #c4c4c4;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #a8a8a8;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
         self.messages_widget = QtWidgets.QWidget()
         self.messages_layout = QtWidgets.QVBoxLayout(self.messages_widget)
-        self.messages_layout.setContentsMargins(0, 0, 0, 0)
-        self.messages_layout.setSpacing(12)
+        self.messages_layout.setContentsMargins(16, 12, 16, 12)
+        self.messages_layout.setSpacing(4)  # Spacing nhỏ hơn cho bubble gần nhau
         # Stretch để các bubble dồn lên trên, chừa chỗ cuối
         self.messages_layout.addStretch()
+        
+        # Subtle loading bar thay vì popup
+        self.loading_bar = QtWidgets.QProgressBar()
+        self.loading_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background-color: transparent;
+                text-align: center;
+                height: 2px;
+                border-radius: 1px;
+                margin: 0px;
+            }
+            QProgressBar::chunk {
+                background-color: #0084ff;
+                border-radius: 1px;
+            }
+        """)
+        self.loading_bar.setRange(0, 0)  # Indeterminate progress
+        self.loading_bar.hide()
+        
+        # Container cho loading bar ở top
+        loading_container = QtWidgets.QWidget()
+        loading_container.setFixedHeight(4)
+        loading_layout = QtWidgets.QVBoxLayout(loading_container)
+        loading_layout.setContentsMargins(0, 0, 0, 0)
+        loading_layout.addWidget(self.loading_bar)
+        
+        # Thêm loading bar vào đầu layout
+        self.messages_layout.insertWidget(0, loading_container)
 
         self.scroll_area.setWidget(self.messages_widget)
         layout.addWidget(self.scroll_area, stretch=1)
 
-        # Input gửi tin
-        input_layout = QtWidgets.QHBoxLayout()
-        input_layout.setContentsMargins(0, 0, 0, 0)
-        input_layout.setSpacing(8)
+        # Input gửi tin - Modern design
+        input_container = QtWidgets.QWidget()
+        input_container.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-top: 1px solid #e4e6ea;
+                padding: 0px;
+            }
+        """)
+        
+        input_layout = QtWidgets.QHBoxLayout(input_container)
+        input_layout.setContentsMargins(16, 12, 16, 12)
+        input_layout.setSpacing(12)
 
         self.message_input = QtWidgets.QLineEdit()
         self.message_input.setPlaceholderText("Nhập tin nhắn...")
+        self.message_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #f7f8fa;
+                border: 1px solid #e4e6ea;
+                border-radius: 20px;
+                padding: 10px 16px;
+                font-size: 14px;
+                color: #1a1a1a;
+                min-height: 20px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #0084FF;
+                background-color: #ffffff;
+            }
+            QLineEdit::placeholder {
+                color: #8a8d91;
+            }
+        """)
         self.message_input.returnPressed.connect(self._on_send_message)
+        
+        # Connect text changed để hiển thị typing indicator
+        self.message_input.textChanged.connect(self._on_text_changed)
 
-        self.send_button = QtWidgets.QPushButton("Gửi")
+        self.send_button = QtWidgets.QPushButton("➤")
+        self.send_button.setFixedSize(40, 40)
+        self.send_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0084FF;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0073E6;
+                transform: scale(1.05);
+            }
+            QPushButton:pressed {
+                background-color: #005CBF;
+                transform: scale(0.95);
+            }
+            QPushButton:disabled {
+                background-color: #bcc0c4;
+            }
+        """)
         self.send_button.clicked.connect(self._on_send_message)
 
         input_layout.addWidget(self.message_input, stretch=1)
         input_layout.addWidget(self.send_button)
-        layout.addWidget(QtWidgets.QWidget())  # spacer
-        layout.addLayout(input_layout)
+        layout.addWidget(input_container)
+    
+    def _setup_scroll_loading(self):
+        """Setup scroll detection để load thêm tin nhắn cũ"""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar.valueChanged.connect(self._on_scroll_changed)
+        
+    def _on_scroll_changed(self, value):
+        """Detect scroll lên đầu để load thêm tin nhắn cũ"""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        
+        # Nếu scroll gần đầu (trong 50 pixels) và còn tin nhắn để load
+        if value <= 50 and hasattr(self.logic, 'has_more_messages') and self.logic.has_more_messages:
+            if not hasattr(self.logic, 'is_loading_more') or not self.logic.is_loading_more:
+                print("[DEBUG] Near top of scroll, loading more messages...")
+                self.show_loading_indicator()
+                asyncio.create_task(self._load_more_with_indicator())
+    
+    async def _load_more_with_indicator(self):
+        """Load more messages với loading bar"""
+        try:
+            await self.logic.load_more_messages()
+        finally:
+            self.hide_loading_indicator()
+    
+    def show_loading_indicator(self):
+        """Hiển thị loading bar"""
+        if hasattr(self, 'loading_bar'):
+            self.loading_bar.show()
+    
+    def _animate_message_bubble(self, bubble):
+        """Add smooth fade-in animation to message bubble"""
+        try:
+            # Ensure bubble is visible first
+            bubble.setVisible(True)
+            bubble.show()
+            
+            # Skip animation for now to fix visibility issues
+            print(f"[DEBUG] Message bubble animated and visible: {bubble.isVisible()}")
+            
+        except Exception as e:
+            print(f"[DEBUG] Animation error (fallback to instant): {e}")
+            # Fallback - just show bubble instantly
+            bubble.setVisible(True)
+            bubble.show()
+
+    def hide_loading_indicator(self):
+        """Ẩn loading bar"""
+        if hasattr(self, 'loading_bar'):
+            self.loading_bar.hide()
+
+    def prepend_messages(self, messages, username):
+        """Thêm tin nhắn cũ vào đầu danh sách (cho lazy loading)"""
+        if not messages:
+            return
+            
+        # Lưu scroll position hiện tại
+        scrollbar = self.scroll_area.verticalScrollBar()
+        old_value = scrollbar.value()
+        old_max = scrollbar.maximum()
+        
+        # Thêm tin nhắn vào đầu (reverse order vì server trả về DESC)
+        for msg in reversed(messages):
+            sender = msg.get('sender_name', 'Unknown')
+            time_str = msg.get("time_send", "Unknown")
+            content = msg.get('content', '')
+            is_sent = sender.lower() == username.lower()
+            
+            # Tạo bubble và thêm vào đầu layout (sau header nhưng trước tin nhắn hiện tại)
+            bubble = MessageBubble(
+                content, 
+                is_sent=is_sent, 
+                timestamp=time_str, 
+                sender_name=sender, 
+                show_sender_name=(not is_sent), 
+                show_timestamp=False
+            )
+            
+            # Insert vào vị trí 0 (ngay sau stretch đầu tiên)
+            self.messages_layout.insertWidget(1, bubble)
+            
+        # Điều chỉnh scroll để giữ vị trí tương đối
+        QTimer.singleShot(100, lambda: self._adjust_scroll_after_prepend(old_value, old_max))
+        
+    def _adjust_scroll_after_prepend(self, old_value, old_max):
+        """Điều chỉnh scroll position sau khi prepend tin nhắn"""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        new_max = scrollbar.maximum()
+        
+        # Tính toán vị trí mới để giữ tin nhắn hiện tại ở cùng vị trí
+        if old_max > 0:
+            ratio = old_value / old_max
+            new_value = int(ratio * new_max)
+            scrollbar.setValue(new_value)
+        else:
+            # Nếu không có scroll trước đó, scroll xuống một chút để không ở đầu
+            scrollbar.setValue(100)
+
+    def _on_text_changed(self):
+        """Handle typing indicator"""
+        text = self.message_input.text()
+        # Enable/disable send button based on text content
+        self.send_button.setEnabled(bool(text.strip()))
+        
+        # Update send button style
+        if text.strip():
+            self.send_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #0084FF;
+                    color: white;
+                    border: none;
+                    border-radius: 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #0073E6;
+                    transform: scale(1.05);
+                }
+                QPushButton:pressed {
+                    background-color: #005CBF;
+                    transform: scale(0.95);
+                }
+            """)
+        else:
+            self.send_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #bcc0c4;
+                    color: white;
+                    border: none;
+                    border-radius: 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+            """)
 
     def update_group_info(self):
         """Cập nhật thông tin nhóm hiển thị"""
@@ -275,9 +543,19 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         print(f"[DEBUG] Send group message response: {response}")
 
         if response and response.get("success"):
+            # Clear input với animation
             self.message_input.clear()
-            print(f"[DEBUG] Message sent successfully, reloading messages")
-            await self.logic.load_group_messages(offset=0)
+            
+            # Hiệu ứng feedback khi gửi thành công
+            self.send_button.setText("✓")
+            QTimer.singleShot(500, lambda: self.send_button.setText("➤"))
+            
+            print(f"[DEBUG] Message sent successfully, reloading with lazy loading")
+            # Reset lazy loading và load lại từ đầu
+            self.logic.total_messages_loaded = 0
+            self.logic.has_more_messages = True
+            self.logic.is_loading_more = False
+            await self.logic.load_initial_messages()
         else:
             error_msg = response.get("message", "Không thể gửi tin nhắn") if response else "Không có phản hồi từ server"
             print(f"[DEBUG] Failed to send message: {error_msg}")
@@ -304,9 +582,26 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             pass
 
     def _scroll_to_bottom(self):
-        """Scroll to bottom of message area"""
-        bar = self.scroll_area.verticalScrollBar()
-        bar.setValue(bar.maximum())
+        """Cuộn xuống cuối với hiệu ứng mượt mà"""
+        if self.scroll_area:
+            # Scroll animation cho mượt mà
+            scrollbar = self.scroll_area.verticalScrollBar()
+            
+            # Tạo animation cho scroll
+            from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+            
+            if hasattr(self, '_scroll_animation'):
+                self._scroll_animation.stop()
+            
+            self._scroll_animation = QPropertyAnimation(scrollbar, b"value")
+            self._scroll_animation.setDuration(150)  # 150ms animation
+            self._scroll_animation.setEasingCurve(QEasingCurve.Type.OutQuart)
+            self._scroll_animation.setStartValue(scrollbar.value())
+            self._scroll_animation.setEndValue(scrollbar.maximum())
+            self._scroll_animation.start()
+            
+            # Fallback nếu animation không hoạt động
+            QTimer.singleShot(200, lambda: scrollbar.setValue(scrollbar.maximum()))
 
     async def load_group_members(self):
         """Load và hiển thị thông tin thành viên nhóm"""

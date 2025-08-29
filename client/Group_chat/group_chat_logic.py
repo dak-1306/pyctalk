@@ -6,7 +6,7 @@ import asyncio
 
 
 class GroupChatLogic:
-    """Async logic cho GroupChatWindow (toàn bộ xử lý đã gom về đây)"""
+    """Async logic cho GroupChatWindow với lazy loading"""
 
     def __init__(self, ui, api_client, user_id, username):
         self.ui = ui
@@ -17,6 +17,12 @@ class GroupChatLogic:
         self.message_offset = 0
         self.loading_lock = asyncio.Lock()  # Prevent concurrent loading
         self._realtime_connected = False
+        
+        # Lazy loading settings
+        self.messages_per_load = 20  # Tải 20 tin nhắn mỗi lần thay vì 50
+        self.total_messages_loaded = 0
+        self.has_more_messages = True
+        self.is_loading_more = False
 
         # Debug log để kiểm tra thông tin user
         print(f"[DEBUG] GroupChatLogic init: user_id={user_id}, username='{username}'")
@@ -110,71 +116,104 @@ class GroupChatLogic:
         await self.select_group(group_data)
 
     async def select_group(self, group_data):
+        """Select group và reset trạng thái lazy loading"""
         self.current_group = group_data
         self.message_offset = 0
+        self.total_messages_loaded = 0
+        self.has_more_messages = True
+        self.is_loading_more = False
+        
         self.ui.update_group_info(group_data)
-        await self.load_group_messages()
+        
+        # Clear messages trước và load initial batch
+        self.ui.clear_messages()
+        await self.load_initial_messages()
+
+    # ---------------------------
+    # Lazy Loading tin nhắn nhóm
+    # ---------------------------
+    async def load_initial_messages(self):
+        """Load tin nhắn ban đầu (ít nhất để không trống màn hình)"""
+        if not self.current_group:
+            print("[GroupChatLogic] current_group is None, abort load_initial_messages")
+            return
+            
+        print(f"[DEBUG] Loading initial {self.messages_per_load} messages...")
+        await self.load_group_messages(offset=0, limit=self.messages_per_load, is_initial=True)
+
+    async def load_more_messages(self):
+        """Load thêm tin nhắn cũ hơn khi user cuộn lên"""
+        if not self.has_more_messages or self.is_loading_more:
+            return
+            
+        print(f"[DEBUG] Loading more messages, offset={self.total_messages_loaded}")
+        await self.load_group_messages(
+            offset=self.total_messages_loaded, 
+            limit=self.messages_per_load, 
+            is_initial=False
+        )
 
     # ---------------------------
     # Tải tin nhắn nhóm
     # ---------------------------
-    async def load_group_messages(self, offset=0, limit=50):
+    async def load_group_messages(self, offset=0, limit=20, is_initial=True):
+        """Load tin nhắn với lazy loading support"""
         async with self.loading_lock:  # Prevent concurrent loading
             if not self.current_group:
                 print("[GroupChatLogic] current_group is None, abort load_group_messages")
                 return
+                
+            if not is_initial:
+                self.is_loading_more = True
+                
             response = await self.api_client.get_group_messages(
                 self.current_group["group_id"], self.user_id, limit, offset
             )
+            
+            if not is_initial:
+                self.is_loading_more = False
+                
             if not response:
-                QMessageBox.critical(self.ui, "Lỗi", "Không nhận được phản hồi từ server!")
+                print("[GroupChatLogic] No response from server!")
                 return
+                
             if response.get("success"):
                 messages = response.get("messages", [])
-                print(f"[DEBUG] load_group_messages: Loaded {len(messages)} messages for group_id={self.current_group['group_id']}")
-                print(f"[DEBUG] load_group_messages: First few messages: {messages[:3] if messages else 'None'}")
-                self.display_messages(messages, offset, self.username)
+                print(f"[DEBUG] load_group_messages: Loaded {len(messages)} messages for group_id={self.current_group['group_id']}, offset={offset}")
+                
+                # Cập nhật trạng thái
+                if len(messages) < limit:
+                    self.has_more_messages = False
+                    print("[DEBUG] No more messages to load")
+                
+                if len(messages) > 0:
+                    self.total_messages_loaded += len(messages)
+                    self.display_messages(messages, offset, self.username, is_initial)
+                else:
+                    print("[DEBUG] No messages returned")
             else:
                 print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
-                # If user is not a member anymore, don't show error dialog repeatedly
                 error_msg = response.get('message', '')
                 if 'không phải thành viên' in error_msg:
                     print(f"[GroupChatLogic][INFO] User no longer in group, stopping message loading")
-                    return
-                QMessageBox.warning(self.ui, "Lỗi", error_msg)    # ---------------------------
+                    return    # ---------------------------
     # Hiển thị tin nhắn
     # ---------------------------
-    def display_messages(self, messages, offset, username):
+    def display_messages(self, messages, offset, username, is_initial=True):
+        """Hiển thị tin nhắn với hỗ trợ lazy loading và smooth animation"""
         try:
-            if offset == 0:
-                self.ui.clear_messages()
-            
-            # Theo dõi người gửi tin nhắn trước đó để quyết định có hiển thị tên không
-            previous_sender = None
-            
-            for i, msg in enumerate(messages):
-                sender = msg.get('sender_name', 'Unknown')
-                time_str = msg.get("time_send", "Unknown")
-                content = msg.get('content', '')
-                # Fix case-insensitive comparison
-                is_sent = sender.lower() == username.lower()
+            # Không clear messages nếu đang load more (prepend vào đầu)
+            if not is_initial and offset > 0:
+                # Prepend messages vào đầu danh sách với animation
+                print(f"[DEBUG] Prepending {len(messages)} older messages with animation")
+                asyncio.create_task(self._animate_prepend_messages(messages, username))
+            else:
+                # Load initial hoặc refresh - clear và load từ đầu
+                if is_initial:
+                    self.ui.clear_messages()
                 
-                # Quyết định có hiển thị tên người gửi không
-                show_sender_name = False
-                if not is_sent:  # Chỉ hiển thị tên cho tin nhắn của người khác
-                    # Hiển thị tên nếu:
-                    # 1. Là tin nhắn đầu tiên, hoặc
-                    # 2. Người gửi khác với tin nhắn trước đó
-                    if previous_sender is None or previous_sender.lower() != sender.lower():
-                        show_sender_name = True
-                
-                # Debug log để kiểm tra logic
-                print(f"[DEBUG] display_messages: sender='{sender}', username='{username}', is_sent={is_sent}, show_sender_name={show_sender_name}, content='{content[:30]}...'")
-                
-                self.ui.add_message(content, is_sent, time_str, sender, show_sender_name)
-                
-                # Cập nhật người gửi trước đó
-                previous_sender = sender
+                # Animate initial messages loading
+                asyncio.create_task(self._animate_initial_messages(messages, username))
                 
         except (RuntimeError, AttributeError) as e:
             # Handle UI widget deletion or attribute errors
@@ -185,14 +224,49 @@ class GroupChatLogic:
                     {
                         'content': msg.get('content', ''),
                         'is_sent': msg.get('sender_name', '').lower() == username.lower(),
-                        'timestamp': msg.get('time_send', '')
+                        'timestamp': msg.get("time_send", "Unknown"),
+                        'sender': msg.get('sender_name', 'Unknown')
                     } for msg in messages
                 ])
+    
+    async def _animate_initial_messages(self, messages, username):
+        """Animate initial messages loading với batch và delay"""
+        previous_sender = None
+        batch_size = 5  # Load 5 messages at a time
+        delay_between_batches = 50  # 50ms delay between batches
+        
+        for i in range(0, len(messages), batch_size):
+            batch = messages[i:i + batch_size]
+            
+            for msg in batch:
+                sender = msg.get('sender_name', 'Unknown')
+                time_str = msg.get("time_send", "Unknown")
+                content = msg.get('content', '')
+                is_sent = sender.lower() == username.lower()
+                
+                # Logic hiển thị tên người gửi
+                show_sender_name = False
+                if not is_sent:
+                    if previous_sender is None or previous_sender.lower() != sender.lower():
+                        show_sender_name = True
+                
+                # Add message to UI
+                self.ui.add_message(content, is_sent, time_str, sender, show_sender_name)
+                previous_sender = sender
+            
+            # Small delay between batches for smooth effect
+            if i + batch_size < len(messages):
+                await asyncio.sleep(delay_between_batches / 1000.0)
+    
+    async def _animate_prepend_messages(self, messages, username):
+        """Animate prepending older messages"""
+        self.ui.prepend_messages(messages, username)
 
     # ---------------------------
     # Gửi tin nhắn
     # ---------------------------
     async def send_message(self, content: str):
+        """Gửi tin nhắn và refresh danh sách"""
         if not self.current_group:
             QMessageBox.warning(self.ui, "Lỗi", "Vui lòng chọn nhóm trước")
             return
@@ -203,7 +277,11 @@ class GroupChatLogic:
             self.user_id, self.current_group["group_id"], content.strip()
         )
         if response and response.get("success"):
-            await self.load_group_messages(offset=0)
+            # Reset lazy loading state và reload từ đầu
+            self.total_messages_loaded = 0
+            self.has_more_messages = True
+            self.is_loading_more = False
+            await self.load_initial_messages()
         else:
             QMessageBox.warning(self.ui, "Lỗi", "Không thể gửi tin nhắn")
 

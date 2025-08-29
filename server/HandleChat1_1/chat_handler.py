@@ -205,28 +205,59 @@ class Chat1v1Handler:
             return {"success": False, "message": f"Error marking as read: {str(e)}"}
 
     def register_user_connection(self, username: str, user_id: str, writer):
-        """Register user connection with both username and user_id"""
-        connection_data = (None, writer)
+        """Register user connection with session-specific tracking"""
+        import time
+        session_id = f"{username}_{user_id}_{int(time.time() * 1000)}"  # Add timestamp for uniqueness
+        connection_data = (session_id, writer)
+        
+        # Store with session-specific key to avoid conflicts
+        self.user_connections[session_id] = connection_data
+        
+        # Keep backward compatibility mappings (latest connection wins)
         self.user_connections[username] = connection_data
-        self.user_connections[str(user_id)] = connection_data  # Also store by user_id
-        print(f"✅ User {username} (ID: {user_id}) connected for chat")
+        self.user_connections[str(user_id)] = connection_data
+        
+        print(f"✅ User {username} (ID: {user_id}) connected for chat (session: {session_id})")
+        print(f"[DEBUG] Total active connections: {len(self.user_connections)}")
+        
+        return session_id  # Return session ID for cleanup
 
-    def unregister_user_connection(self, username: str, user_id: str = None):
-        """Unregister user connection"""
-        if username in self.user_connections:
-            _, writer = self.user_connections[username]
-            try:
-                writer.close()
-                asyncio.create_task(writer.wait_closed())
-            except Exception:
-                pass
-            del self.user_connections[username]
+    def unregister_user_connection(self, username: str, user_id: str = None, session_id: str = None):
+        """Unregister user connection - use session_id for precise cleanup"""
+        connections_to_remove = []
+        
+        # If session_id provided, remove that specific session
+        if session_id and session_id in self.user_connections:
+            connections_to_remove.append(session_id)
+            print(f"[DEBUG] Removing specific session: {session_id}")
+        else:
+            # Fallback to old method - find connections to remove
+            if user_id:
+                connection_key = f"{username}_{user_id}"
+                if connection_key in self.user_connections:
+                    connections_to_remove.append(connection_key)
             
-            # Also remove by user_id if provided
+            # Remove old-style entries only if no specific session
+            if username in self.user_connections:
+                connections_to_remove.append(username)
             if user_id and str(user_id) in self.user_connections:
-                del self.user_connections[str(user_id)]
+                connections_to_remove.append(str(user_id))
+        
+        # Clean up connections
+        for key in connections_to_remove:
+            if key in self.user_connections:
+                try:
+                    _, writer = self.user_connections[key]
+                    if hasattr(writer, 'is_closing') and not writer.is_closing():
+                        writer.close()
+                        asyncio.create_task(writer.wait_closed())
+                except Exception as e:
+                    print(f"[WARNING] Error closing writer for {key}: {e}")
                 
-            print(f"❌ User {username} (ID: {user_id}) disconnected from chat")
+                del self.user_connections[key]
+                print(f"❌ Connection {key} removed from chat")
+        
+        print(f"[DEBUG] Active connections after cleanup: {len(self.user_connections)} total")
 
     def get_online_users(self):
         """Get list of currently online users"""
