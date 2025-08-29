@@ -1,5 +1,7 @@
 import sys
 import os
+import base64
+import uuid
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.db import AsyncMySQLDatabase
@@ -165,6 +167,109 @@ class UserProfileHandler:
             
         except Exception as e:
             print(f"❌ Lỗi update_user_profile: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "message": str(e)}
+
+    async def upload_avatar(self, user_id, avatar_data, filename):
+        """Upload avatar cho user"""
+        try:
+            print(f"[DEBUG] upload_avatar called for user_id: {user_id}, filename: {filename}")
+            
+            # Ensure database connection
+            if not self.db.pool:
+                await self.db.connect()
+            
+            # Tạo thư mục uploads nếu chưa có
+            upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads', 'avatars')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Tạo tên file duy nhất
+            file_extension = os.path.splitext(filename)[1] if filename else '.jpg'
+            unique_filename = f"{user_id}_{uuid.uuid4().hex}{file_extension}"
+            file_path = os.path.join(upload_dir, unique_filename)
+            
+            # Decode và lưu file
+            try:
+                # Nếu avatar_data là base64 string
+                if isinstance(avatar_data, str) and ',' in avatar_data:
+                    # Extract base64 data from data URL
+                    header, base64_data = avatar_data.split(',', 1)
+                    image_data = base64.b64decode(base64_data)
+                else:
+                    # Nếu đã là bytes
+                    image_data = base64.b64decode(avatar_data) if isinstance(avatar_data, str) else avatar_data
+                
+                with open(file_path, 'wb') as f:
+                    f.write(image_data)
+                    
+            except Exception as e:
+                print(f"❌ Error saving avatar file: {e}")
+                return {"status": "error", "message": f"Không thể lưu file: {e}"}
+            
+            # Tạo URL tương đối
+            avatar_url = f"/uploads/avatars/{unique_filename}"
+            
+            # Cập nhật avatar_url trong database
+            update_query = """
+                UPDATE user_profiles 
+                SET avatar_url = %s, updated_at = NOW()
+                WHERE user_id = %s
+            """
+            
+            result = await self.db.execute(update_query, (avatar_url, user_id))
+            
+            print(f"✅ Avatar uploaded successfully for user_id {user_id}: {avatar_url}")
+            return {
+                "status": "ok", 
+                "message": "Avatar uploaded successfully",
+                "avatar_url": avatar_url
+            }
+            
+        except Exception as e:
+            print(f"❌ Lỗi upload_avatar: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "message": str(e)}
+
+    async def delete_avatar(self, user_id):
+        """Xóa avatar của user"""
+        try:
+            print(f"[DEBUG] delete_avatar called for user_id: {user_id}")
+            
+            # Ensure database connection
+            if not self.db.pool:
+                await self.db.connect()
+            
+            # Lấy avatar_url hiện tại
+            select_query = "SELECT avatar_url FROM user_profiles WHERE user_id = %s"
+            result = await self.db.fetch_one(select_query, (user_id,))
+            
+            if result and result['avatar_url']:
+                # Xóa file vật lý
+                file_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                    result['avatar_url'].lstrip('/')
+                )
+                
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"✅ Deleted avatar file: {file_path}")
+            
+            # Cập nhật database
+            update_query = """
+                UPDATE user_profiles 
+                SET avatar_url = '', updated_at = NOW()
+                WHERE user_id = %s
+            """
+            
+            await self.db.execute(update_query, (user_id,))
+            
+            print(f"✅ Avatar deleted successfully for user_id {user_id}")
+            return {"status": "ok", "message": "Avatar deleted successfully"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi delete_avatar: {e}")
             import traceback
             traceback.print_exc()
             return {"status": "error", "message": str(e)}

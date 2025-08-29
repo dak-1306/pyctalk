@@ -1,5 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import pyqtSignal
+import asyncio
 
 class ClickableLabel(QtWidgets.QLabel):
     """Clickable label widget"""
@@ -18,10 +19,12 @@ class TopBarWidget(QtWidgets.QFrame):
     # Signal for avatar click
     avatar_clicked = pyqtSignal()
     
-    def __init__(self, username, parent=None):
+    def __init__(self, username, client=None, user_id=None, parent=None):
         super().__init__(parent)
         self.setObjectName("topbar")
         self.username = username
+        self.client = client
+        self.user_id = user_id
         self._setup_ui(username)
 
     def _setup_ui(self, username):
@@ -75,7 +78,11 @@ class TopBarWidget(QtWidgets.QFrame):
         user_container.mousePressEvent = lambda event: self.avatar_clicked.emit() if event.button() == QtCore.Qt.MouseButton.LeftButton else None
         
         tb_layout.addWidget(user_container)
-
+        
+        # Load avatar if client is available
+        if self.client and self.user_id:
+            QtCore.QTimer.singleShot(100, lambda: asyncio.create_task(self._load_avatar()))
+        
         # Theme toggle button (giữ lại vì hữu ích)
         self.btnThemeToggle = QtWidgets.QPushButton("🌙")
         self.btnThemeToggle.setFixedSize(36, 36)
@@ -87,3 +94,81 @@ class TopBarWidget(QtWidgets.QFrame):
         tb_layout.addWidget(self.btnLogout)
 
     # Các phương thức cập nhật trạng thái, theme, ... có thể bổ sung tại đây
+    
+    async def _load_avatar(self):
+        """Load user avatar from server"""
+        try:
+            if not self.client or not self.user_id:
+                return
+                
+            response = await self.client.send_json({
+                'action': 'get_user_profile',
+                'data': {'user_id': self.user_id}
+            })
+            
+            if response and response.get('status') == 'ok':
+                profile_data = response.get('data', {})
+                avatar_url = profile_data.get('avatar_url')
+                
+                if avatar_url:
+                    # Update avatar to show it exists
+                    self.avatar_label.setText("👤")  # Keep the same emoji but could be customized
+                    self.avatar_label.setStyleSheet("""
+                        QLabel {
+                            border-radius: 14px;
+                            border: 2px solid #4CAF50;
+                            background-color: #6366f1;
+                            color: white;
+                        }
+                        QLabel:hover {
+                            border-color: #45a049;
+                        }
+                    """)
+                    print(f"[DEBUG] User has avatar: {avatar_url}")
+                else:
+                    # Reset to default
+                    self.avatar_label.setStyleSheet("""
+                        QLabel {
+                            border-radius: 14px;
+                            border: 2px solid white;
+                        }
+                        QLabel:hover {
+                            border-color: #3b82f6;
+                        }
+                    """)
+                    
+        except Exception as e:
+            print(f"[ERROR] Error loading avatar: {e}")
+            
+    def update_avatar(self, avatar_url=None):
+        """Update avatar display"""
+        try:
+            if avatar_url:
+                # User has avatar - update styling
+                self.avatar_label.setStyleSheet("""
+                    QLabel {
+                        border-radius: 14px;
+                        border: 2px solid #4CAF50;
+                        background-color: #6366f1;
+                        color: white;
+                    }
+                    QLabel:hover {
+                        border-color: #45a049;
+                    }
+                """)
+                print(f"[DEBUG] Avatar updated with URL: {avatar_url}")
+            else:
+                # Reset to default
+                self.avatar_label.setStyleSheet("""
+                    QLabel {
+                        border-radius: 14px;
+                        border: 2px solid white;
+                    }
+                    QLabel:hover {
+                        border-color: #3b82f6;
+                    }
+                """)
+                print("[DEBUG] Avatar reset to default")
+                
+        except Exception as e:
+            print(f"[ERROR] Error updating avatar: {e}")

@@ -284,16 +284,20 @@ class ChatWindow(QtWidgets.QWidget):
                 border-radius: 20px;
                 font-size: 16px;
                 font-weight: bold;
+                transition: all 0.3s ease;
             }
             QPushButton:hover {
                 background-color: #5a67d8;
+                transform: scale(1.05);
             }
             QPushButton:pressed {
                 background-color: #4c51bf;
+                transform: scale(0.95);
             }
             QPushButton:disabled {
-                background-color: #cbd5e0;
-                color: #a0aec0;
+                background-color: #e1e5e9;  /* Màu xám đậm hơn */
+                color: #8a8d91;  /* Màu chữ tối hơn */
+                border: 1px solid #d1d5db;  /* Thêm border */
             }
         """)
         self.btn_send.setEnabled(False)  # Disabled by default

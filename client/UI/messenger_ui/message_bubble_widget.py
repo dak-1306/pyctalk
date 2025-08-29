@@ -113,9 +113,28 @@ class MessageBubble(QtWidgets.QWidget):
                     font-weight: bold;
                 }
             """)
-            # Hiển thị chữ cái đầu của tên
-            initial = self.sender_name[0].upper() if self.sender_name else "?"
-            avatar_label.setText(initial)
+
+            # Check if sender has avatar
+            sender_avatar = getattr(self, 'sender_avatar', '')
+            if sender_avatar:
+                # TODO: Load actual avatar image
+                # For now, show different styling to indicate avatar exists
+                avatar_label.setStyleSheet("""
+                    QLabel {
+                        background-color: #0084FF;
+                        border-radius: 16px;
+                        color: white;
+                        font-size: 12px;
+                        font-weight: bold;
+                        border: 2px solid #4CAF50;
+                    }
+                """)
+                avatar_label.setText("📷")  # Camera emoji to indicate avatar
+            else:
+                # Hiển thị chữ cái đầu của tên
+                initial = self.sender_name[0].upper() if self.sender_name else "?"
+                avatar_label.setText(initial)
+
             avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             bubble_container.addWidget(avatar_label, alignment=Qt.AlignmentFlag.AlignBottom)
         

@@ -1,5 +1,7 @@
 from PyQt6 import QtCore, QtWidgets, QtGui
 import asyncio
+import base64
+import os
 
 class MyProfileWindow(QtWidgets.QDialog):
     """Window to display and edit current user's profile"""
@@ -68,6 +70,7 @@ class MyProfileWindow(QtWidgets.QDialog):
         form_layout.setContentsMargins(15, 15, 15, 15)
         
         # Create form fields
+        self._create_avatar_section(form_layout)
         self._create_form_fields(form_layout)
         
         scroll.setWidget(form_widget)
@@ -113,6 +116,84 @@ class MyProfileWindow(QtWidgets.QDialog):
         button_layout.addWidget(save_btn)
         button_layout.addWidget(cancel_btn)
         main_layout.addLayout(button_layout)
+        
+    def _create_avatar_section(self, layout):
+        """Create avatar upload section"""
+        # Avatar container
+        avatar_container = QtWidgets.QWidget()
+        avatar_layout = QtWidgets.QVBoxLayout(avatar_container)
+        avatar_layout.setContentsMargins(0, 0, 0, 0)
+        avatar_layout.setSpacing(10)
+        avatar_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        
+        # Avatar display
+        self.avatar_label = QtWidgets.QLabel()
+        self.avatar_label.setFixedSize(120, 120)
+        self.avatar_label.setStyleSheet("""
+            QLabel {
+                border: 3px solid #e0e0e0;
+                border-radius: 60px;
+                background-color: #f8f9fa;
+            }
+        """)
+        self.avatar_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.avatar_label.setText("👤")
+        self.avatar_label.setFont(QtGui.QFont("Arial", 40))
+        
+        # Buttons container
+        buttons_container = QtWidgets.QWidget()
+        buttons_layout = QtWidgets.QHBoxLayout(buttons_container)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(8)
+        
+        # Upload button
+        self.upload_btn = QtWidgets.QPushButton("📁 Chọn ảnh")
+        self.upload_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6366f1;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4f46e5;
+            }
+        """)
+        self.upload_btn.clicked.connect(self._select_avatar)
+        
+        # Delete button
+        self.delete_btn = QtWidgets.QPushButton("🗑️ Xóa")
+        self.delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
+        self.delete_btn.clicked.connect(self._delete_avatar)
+        self.delete_btn.setEnabled(False)  # Disabled by default
+        
+        buttons_layout.addWidget(self.upload_btn)
+        buttons_layout.addWidget(self.delete_btn)
+        
+        avatar_layout.addWidget(self.avatar_label)
+        avatar_layout.addWidget(buttons_container)
+        
+        layout.addRow("🖼️ Ảnh đại diện:", avatar_container)
+        
+        # Store avatar data
+        self.avatar_data = None
+        self.avatar_filename = None
         
     def _create_form_fields(self, layout):
         """Create form input fields"""
@@ -271,6 +352,16 @@ class MyProfileWindow(QtWidgets.QDialog):
             except Exception as e:
                 print(f"[DEBUG] Error parsing birth_date: {e}")
         
+        # Avatar
+        avatar_url = self.profile_data.get("avatar_url")
+        if avatar_url:
+            # Load avatar from server
+            asyncio.create_task(self._load_avatar_from_url(avatar_url))
+            self.delete_btn.setEnabled(True)
+            print(f"[DEBUG] User has avatar: {avatar_url}")
+        else:
+            self.delete_btn.setEnabled(False)
+        
         print("[DEBUG] _populate_fields completed")
 
     def _save_profile(self):
@@ -300,13 +391,43 @@ class MyProfileWindow(QtWidgets.QDialog):
             print(f"[DEBUG] Saving profile data: {profile_data}")
             
             # Create async task to save data
-            asyncio.create_task(self._send_save_request(profile_data))
+            asyncio.create_task(self._save_profile_async(profile_data))
             
         except Exception as e:
             print(f"[ERROR] Error saving profile: {e}")
             QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể lưu hồ sơ: {e}")
 
-    async def _send_save_request(self, profile_data):
+    async def _save_profile_async(self, profile_data):
+        """Async method to save profile and upload avatar"""
+        try:
+            # Upload avatar first if there's new avatar data
+            if self.avatar_data:
+                avatar_response = await self._upload_avatar_to_server()
+                if avatar_response.get('status') != 'ok':
+                    QtWidgets.QMessageBox.warning(
+                        self, "Lỗi", 
+                        f"Không thể upload avatar: {avatar_response.get('message', 'Lỗi không xác định')}"
+                    )
+                    return
+            
+            # Then save profile data
+            response = await self.client.send_json({
+                'action': 'update_user_profile',
+                'data': profile_data
+            })
+            
+            print(f"[DEBUG] Save response: {response}")
+            
+            if response and response.get('status') == 'ok':
+                QtWidgets.QMessageBox.information(self, "Thành công", "Hồ sơ đã được cập nhật!")
+                self.accept()  # Close dialog
+            else:
+                error_msg = response.get('message', 'Lỗi không xác định') if response else 'Không có phản hồi từ server'
+                QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể lưu hồ sơ: {error_msg}")
+                
+        except Exception as e:
+            print(f"[ERROR] Error saving profile: {e}")
+            QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể kết nối server: {e}")
         """Send save request to server"""
         try:
             response = await self.client.send_json({
@@ -326,3 +447,145 @@ class MyProfileWindow(QtWidgets.QDialog):
         except Exception as e:
             print(f"[ERROR] Error sending save request: {e}")
             QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể kết nối server: {e}")
+
+    def _select_avatar(self):
+        """Select avatar image file"""
+        try:
+            file_dialog = QtWidgets.QFileDialog()
+            file_path, _ = file_dialog.getOpenFileName(
+                self,
+                "Chọn ảnh đại diện",
+                "",
+                "Image Files (*.png *.jpg *.jpeg *.gif *.bmp)"
+            )
+            
+            if file_path:
+                # Load and display image
+                pixmap = QtGui.QPixmap(file_path)
+                if not pixmap.isNull():
+                    # Scale to fit
+                    scaled_pixmap = pixmap.scaled(
+                        120, 120,
+                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                        QtCore.Qt.TransformationMode.SmoothTransformation
+                    )
+                    
+                    # Create circular mask
+                    mask = QtGui.QPixmap(120, 120)
+                    mask.fill(QtCore.Qt.GlobalColor.transparent)
+                    
+                    painter = QtGui.QPainter(mask)
+                    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+                    painter.drawEllipse(0, 0, 120, 120)
+                    painter.end()
+                    
+                    # Apply mask
+                    scaled_pixmap.setMask(mask.createMaskFromColor(QtCore.Qt.GlobalColor.transparent))
+                    
+                    self.avatar_label.setPixmap(scaled_pixmap)
+                    self.avatar_label.setText("")  # Clear text
+                    
+                    # Store file data
+                    self.avatar_filename = os.path.basename(file_path)
+                    
+                    # Read file as base64
+                    with open(file_path, 'rb') as f:
+                        file_data = f.read()
+                        self.avatar_data = base64.b64encode(file_data).decode('utf-8')
+                    
+                    # Enable delete button
+                    self.delete_btn.setEnabled(True)
+                    
+                    print(f"[DEBUG] Avatar selected: {file_path}")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "Lỗi", "Không thể tải ảnh. Vui lòng chọn file ảnh hợp lệ.")
+                    
+        except Exception as e:
+            print(f"[ERROR] Error selecting avatar: {e}")
+            QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể chọn ảnh: {e}")
+
+    def _delete_avatar(self):
+        """Delete current avatar"""
+        try:
+            # Reset to default
+            self.avatar_label.clear()
+            self.avatar_label.setText("👤")
+            self.avatar_label.setFont(QtGui.QFont("Arial", 40))
+            
+            # Clear data
+            self.avatar_data = None
+            self.avatar_filename = None
+            
+            # Disable delete button
+            self.delete_btn.setEnabled(False)
+            
+            print("[DEBUG] Avatar deleted locally")
+            
+        except Exception as e:
+            print(f"[ERROR] Error deleting avatar: {e}")
+
+    async def _load_avatar_from_url(self, avatar_url):
+        """Load avatar image from URL"""
+        try:
+            print(f"[DEBUG] Loading avatar from URL: {avatar_url}")
+
+            # For now, since we don't have a web server running, we'll just show a placeholder
+            # In a real implementation, you would fetch the image from the server
+            # For example:
+            # import requests
+            # response = requests.get(f"http://localhost:8080{avatar_url}")
+            # if response.status_code == 200:
+            #     image_data = response.content
+            #     # Process and display the image
+
+            # For demonstration, we'll just update the UI to show that an avatar exists
+            self.avatar_label.setText("📷")  # Camera emoji to indicate avatar exists
+            self.avatar_label.setFont(QtGui.QFont("Arial", 40))
+            self.avatar_label.setStyleSheet("""
+                QLabel {
+                    border: 3px solid #4CAF50;
+                    border-radius: 60px;
+                    background-color: #f8f9fa;
+                    color: #4CAF50;
+                }
+            """)
+
+            print(f"[DEBUG] Avatar placeholder displayed for URL: {avatar_url}")
+
+        except Exception as e:
+            print(f"[ERROR] Error loading avatar from URL: {e}")
+            # Fallback to default
+            self.avatar_label.setText("👤")
+            self.avatar_label.setFont(QtGui.QFont("Arial", 40))
+            self.avatar_label.setStyleSheet("""
+                QLabel {
+                    border: 3px solid #e0e0e0;
+                    border-radius: 60px;
+                    background-color: #f8f9fa;
+                }
+            """)
+
+    async def _upload_avatar_to_server(self):
+        """Upload avatar to server"""
+        try:
+            if not self.avatar_data or not self.avatar_filename:
+                return {"status": "ok"}  # No avatar to upload
+                
+            print(f"[DEBUG] Uploading avatar for user_id: {self.user_id}")
+            
+            response = await self.client.send_json({
+                'action': 'upload_avatar',
+                'data': {
+                    'user_id': self.user_id,
+                    'avatar_data': self.avatar_data,
+                    'filename': self.avatar_filename
+                }
+            })
+            
+            print(f"[DEBUG] Upload avatar response: {response}")
+            return response
+            
+        except Exception as e:
+            print(f"[ERROR] Error uploading avatar: {e}")
+            return {"status": "error", "message": str(e)}

@@ -57,7 +57,26 @@ class ChatListItem(QtWidgets.QFrame):
             }}
         """)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar.setText(self.chat_data.get('friend_name', 'U')[0].upper())
+
+        # Check if user has avatar
+        friend_avatar = self.chat_data.get('friend_avatar', '')
+        if friend_avatar:
+            # TODO: Load actual avatar image
+            # For now, show different styling to indicate avatar exists
+            avatar.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {self._get_avatar_color()};
+                    color: white;
+                    border-radius: 27px;
+                    font-size: 18px;
+                    font-weight: bold;
+                    border: 3px solid #4CAF50;
+                }}
+            """)
+            avatar.setText("📷")  # Camera emoji to indicate avatar
+        else:
+            avatar.setText(self.chat_data.get('friend_name', 'U')[0].upper())
+
         return avatar
     
     def _create_chat_info(self):

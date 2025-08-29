@@ -430,6 +430,18 @@ class ClientSession:
                 result = await self.user_profile_handler.update_user_profile(user_id, profile_data)
                 await self.send_response(result, request_id)
 
+            elif action == "upload_avatar" and self.user_profile_handler:
+                user_id = data["data"]["user_id"]
+                avatar_data = data["data"]["avatar_data"]
+                filename = data["data"]["filename"]
+                result = await self.user_profile_handler.upload_avatar(user_id, avatar_data, filename)
+                await self.send_response(result, request_id)
+
+            elif action == "delete_avatar" and self.user_profile_handler:
+                user_id = data["data"]["user_id"]
+                result = await self.user_profile_handler.delete_avatar(user_id)
+                await self.send_response(result, request_id)
+
             else:
                 await self.send_response({"success": False, "message": f"Unknown action: {action}"}, request_id)
 

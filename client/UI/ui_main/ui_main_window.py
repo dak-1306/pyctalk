@@ -280,7 +280,7 @@ class Ui_MainWindow(QtCore.QObject):
     
     def _setup_topbar(self):
         """Setup topbar widget"""
-        self.topbar = TopBarWidget(self.username)
+        self.topbar = TopBarWidget(self.username, self.client, self.user_id)
         # self.status_indicator = self.topbar.status_indicator  # DISABLED - status_indicator removed for cleaner UI
         self.btnThemeToggle = self.topbar.btnThemeToggle
         self.btnLogout = self.topbar.btnLogout
@@ -827,6 +827,10 @@ class Ui_MainWindow(QtCore.QObject):
                 username=self.username,
                 parent=self.main_window
             )
+            
+            # Connect to refresh avatar when profile is updated
+            self._profile_window.accepted.connect(self._refresh_avatar)
+            
             self._profile_window.show()
         except Exception as e:
             print(f"[ERROR] Failed to open profile window: {e}")
@@ -1196,3 +1200,14 @@ class Ui_MainWindow(QtCore.QObject):
             logger.info("[Ui_MainWindow] Đã cleanup tài nguyên thành công")
         except Exception as e:
             logger.error(f"[Ui_MainWindow] Lỗi khi cleanup: {e}")
+    
+    def _refresh_avatar(self):
+        """Refresh avatar display after profile update"""
+        try:
+            if hasattr(self, 'topbar') and self.topbar:
+                # Reload avatar in topbar
+                asyncio.create_task(self.topbar._load_avatar())
+                print("[DEBUG] Avatar refreshed in topbar")
+                
+        except Exception as e:
+            print(f"[ERROR] Error refreshing avatar: {e}")

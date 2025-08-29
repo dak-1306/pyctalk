@@ -202,15 +202,22 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.back_btn.setFixedSize(40, 40)
         self.back_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
+                background-color: rgba(255, 255, 255, 0.15);
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 20px;
                 font-size: 18px;
                 font-weight: bold;
+                transition: all 0.3s ease;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: rgba(255, 255, 255, 0.25);
+                border-color: rgba(255, 255, 255, 0.4);
+                transform: scale(1.05);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.35);
+                transform: scale(0.95);
             }
         """)
         self.back_btn.clicked.connect(self._on_back_clicked)
@@ -223,11 +230,14 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         group_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         group_avatar.setStyleSheet("""
             QLabel {
-                background-color: rgba(255, 255, 255, 0.2);
+                background: qlineargradient(45deg,
+                    rgba(255, 255, 255, 0.3) 0%,
+                    rgba(255, 255, 255, 0.1) 100%);
                 color: white;
                 border-radius: 25px;
                 font-size: 20px;
                 font-weight: bold;
+                border: 2px solid rgba(255, 255, 255, 0.3);
             }
         """)
         group_header_layout.addWidget(group_avatar)
@@ -239,6 +249,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 font-size: 18px;
                 font-weight: bold;
                 padding: 0px;
+                text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.3);
             }
         """)
         group_header_layout.addWidget(self.group_info_label)
@@ -250,14 +261,21 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.manage_group_btn.setFixedSize(40, 40)
         self.manage_group_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
+                background-color: rgba(255, 255, 255, 0.15);
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 20px;
                 font-size: 16px;
+                transition: all 0.3s ease;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: rgba(255, 255, 255, 0.25);
+                border-color: rgba(255, 255, 255, 0.4);
+                transform: scale(1.05);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.35);
+                transform: scale(0.95);
             }
         """)
         self.manage_group_btn.clicked.connect(self.open_group_management)
@@ -456,15 +474,20 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 border-radius: 17px;  /* Đồng bộ border-radius */
                 font-size: 16px;
                 font-weight: bold;
+                transition: all 0.3s ease;
             }
             QPushButton:hover {
                 background-color: #0066cc;  /* Đồng bộ hover color */
+                transform: scale(1.05);
             }
             QPushButton:pressed {
                 background-color: #004499;  /* Đồng bộ pressed color */
+                transform: scale(0.95);
             }
             QPushButton:disabled {
-                background-color: #cccccc;  /* Màu xám nhạt hơn khi disabled */
+                background-color: #e1e5e9;  /* Màu xám đậm hơn để dễ nhìn */
+                color: #8a8d91;  /* Màu chữ tối hơn */
+                border: 1px solid #d1d5db;  /* Thêm border để định hình */
             }
         """)
         self.send_button.clicked.connect(self._on_send_message)
@@ -661,23 +684,35 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                     border-radius: 18px;
                     font-size: 16px;
                     font-weight: bold;
+                    transition: all 0.3s ease;
                 }
                 QPushButton:hover {
                     background-color: #0073E6;
+                    transform: scale(1.05);
                 }
                 QPushButton:pressed {
                     background-color: #005CBF;
+                    transform: scale(0.95);
+                }
+                QPushButton:disabled {
+                    background-color: #e1e5e9;
+                    color: #8a8d91;
+                    border: 1px solid #d1d5db;
                 }
             """)
         else:
             self.send_button.setStyleSheet("""
                 QPushButton {
-                    background-color: #bcc0c4;
-                    color: white;
-                    border: none;
+                    background-color: #e1e5e9;  /* Màu xám đậm hơn */
+                    color: #8a8d91;  /* Màu chữ tối hơn */
+                    border: 1px solid #d1d5db;  /* Thêm border */
                     border-radius: 18px;
                     font-size: 16px;
                     font-weight: bold;
+                    transition: all 0.3s ease;
+                }
+                QPushButton:hover {
+                    background-color: #e1e5e9;  /* Không thay đổi khi hover disabled */
                 }
             """)
         
