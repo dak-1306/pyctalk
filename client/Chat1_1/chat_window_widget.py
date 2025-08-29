@@ -1,8 +1,10 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor
+from PyQt6.QtWidgets import QApplication
 import sys
 import os
+import asyncio
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from UI.messenger_ui.message_bubble_widget import MessageBubble
 from UI.messenger_ui.time_formatter import TimeFormatter
@@ -32,6 +34,11 @@ class ChatWindow(QtWidgets.QWidget):
             'last_message': kwargs.get('last_message', ''),
             'unread_count': kwargs.get('unread_count', 0)
         }
+        
+        # Store current user ID for message comparison
+        self.current_user_id = kwargs.get('current_user_id', 0)
+        if chat_data and 'current_user_id' in chat_data:
+            self.current_user_id = chat_data['current_user_id']
         
         # Track previous message for timestamp logic
         self.last_message_time = None
@@ -74,6 +81,49 @@ class ChatWindow(QtWidgets.QWidget):
         main_layout.addWidget(header)
 
     def _create_chat_area(self, main_layout):
+        # Create container for loading spinner and messages
+        chat_container = QtWidgets.QWidget()
+        chat_layout = QtWidgets.QVBoxLayout(chat_container)
+        chat_layout.setContentsMargins(0, 0, 0, 0)
+        chat_layout.setSpacing(0)
+        
+        # Loading spinner
+        self.loading_spinner = QtWidgets.QLabel()
+        self.loading_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.loading_spinner.setStyleSheet("""
+            QLabel {
+                background-color: #f8f9fa;
+                border-radius: 20px;
+                font-size: 14px;
+                color: #666;
+                padding: 20px;
+                margin: 20px;
+            }
+        """)
+        self.loading_spinner.setText("⏳ Đang tải tin nhắn...")
+        self.loading_spinner.hide()
+        chat_layout.addWidget(self.loading_spinner)
+        
+        # Loading bar for lazy loading
+        self.loading_bar = QtWidgets.QProgressBar()
+        self.loading_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background-color: transparent;
+                text-align: center;
+                height: 3px;
+                border-radius: 1px;
+                margin: 0px;
+            }
+            QProgressBar::chunk {
+                background-color: #667eea;
+                border-radius: 1px;
+            }
+        """)
+        self.loading_bar.setRange(0, 0)  # Indeterminate progress
+        self.loading_bar.hide()
+        chat_layout.addWidget(self.loading_bar)
+        
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -88,7 +138,9 @@ class ChatWindow(QtWidgets.QWidget):
         # self.messages_layout.addStretch()
         
         self.scroll_area.setWidget(self.messages_widget)
-        main_layout.addWidget(self.scroll_area)
+        chat_layout.addWidget(self.scroll_area)
+        
+        main_layout.addWidget(chat_container)
 
     def _create_input_area(self, main_layout):
         input_area = QtWidgets.QWidget()
@@ -271,6 +323,106 @@ class ChatWindow(QtWidgets.QWidget):
             print(f"[DEBUG][ChatWindow] All messages cleared")
         except Exception as e:
             print(f"[ERROR][ChatWindow] Error clearing messages: {e}")
+
+    def show_loading_spinner(self, text="Đang tải..."):
+        """Show loading spinner with custom text"""
+        if hasattr(self, 'loading_spinner'):
+            self.loading_spinner.setText(f"⏳ {text}")
+            self.loading_spinner.show()
+            print(f"[DEBUG][ChatWindow] Loading spinner shown: {text}")
+
+    def hide_loading_spinner(self):
+        """Hide loading spinner"""
+        if hasattr(self, 'loading_spinner'):
+            self.loading_spinner.hide()
+            print(f"[DEBUG][ChatWindow] Loading spinner hidden")
+
+    def show_loading_bar(self):
+        """Show loading bar for lazy loading"""
+        if hasattr(self, 'loading_bar'):
+            self.loading_bar.show()
+
+    def hide_loading_bar(self):
+        """Hide loading bar"""
+        if hasattr(self, 'loading_bar'):
+            self.loading_bar.hide()
+
+    def setup_scroll_loading(self, load_more_callback):
+        """Setup scroll detection for lazy loading"""
+        self.load_more_callback = load_more_callback
+        self.scroll_debounce_timer = QTimer()
+        self.scroll_debounce_timer.setSingleShot(True)
+        self.scroll_debounce_timer.timeout.connect(self._execute_load_more)
+        
+        if hasattr(self, 'scroll_area'):
+            scrollbar = self.scroll_area.verticalScrollBar()
+            scrollbar.valueChanged.connect(self._on_scroll_changed)
+            print(f"[DEBUG][ChatWindow] Scroll loading setup completed")
+
+    def _on_scroll_changed(self, value):
+        """Detect scroll to top for loading more messages"""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        
+        # If scrolled near top (within 50 pixels), debounce and load more
+        if value <= 50:
+            print(f"[DEBUG][ChatWindow] Near top of scroll, scheduling load more...")
+            # Stop any existing timer and start a new one (debounce)
+            self.scroll_debounce_timer.stop()
+            self.scroll_debounce_timer.start(300)  # 300ms debounce
+    
+    def _execute_load_more(self):
+        """Execute the load more callback after debounce"""
+        if hasattr(self, 'load_more_callback'):
+            print(f"[DEBUG][ChatWindow] Executing load more after debounce")
+            asyncio.create_task(self.load_more_callback())
+
+    def prepend_messages(self, messages):
+        """Prepend older messages to the beginning of chat"""
+        print(f"[DEBUG][ChatWindow] Prepending {len(messages)} older messages")
+        
+        # Remember current scroll position
+        scroll_bar = self.scroll_area.verticalScrollBar()
+        old_scroll_value = scroll_bar.value()
+        old_max_value = scroll_bar.maximum()
+        
+        # Reverse messages since they come newest first from server
+        # We want to add them in chronological order at the top
+        reversed_messages = list(reversed(messages))
+        
+        # Add messages at the beginning
+        for i, message in enumerate(reversed_messages):
+            sender_id = int(message.get("from") or message.get("user_id", 0))
+            content = message.get("message", "")
+            timestamp = message.get("timestamp")
+            is_read = message.get("is_read", None)
+            
+            # Determine if this is from current user
+            is_current_user = (sender_id == getattr(self, 'current_user_id', 0))
+            
+            # For sent messages, pass read status; for received messages, don't show status
+            message_is_read = is_read if is_current_user else None
+            
+            # Create message bubble
+            bubble = MessageBubble(content, is_current_user, timestamp, message_is_read)
+            bubble.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            
+            # Insert at the top (after any existing messages)
+            self.messages_layout.insertWidget(i, bubble)
+        
+        # Adjust scroll position to maintain user's view
+        # Calculate new position to keep same relative position
+        QApplication.processEvents()  # Process layout changes
+        new_max_value = scroll_bar.maximum()
+        
+        if old_max_value > 0:
+            # Calculate the content that was added
+            added_content_height = new_max_value - old_max_value
+            new_scroll_value = old_scroll_value + added_content_height
+        else:
+            new_scroll_value = old_scroll_value
+            
+        scroll_bar.setValue(new_scroll_value)
+        print(f"[DEBUG][ChatWindow] Adjusted scroll from {old_scroll_value} to {new_scroll_value}")
 
     def _scroll_to_bottom(self):
         self.scroll_area.verticalScrollBar().setValue(

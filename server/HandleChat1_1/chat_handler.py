@@ -103,11 +103,12 @@ class Chat1v1Handler:
             return {"success": False, "message": f"Error sending message: {str(e)}"}
 
     async def handle_get_history(self, writer, request_data: dict):
-        """Get chat history between two users"""
+        """Get chat history between two users with pagination support"""
         try:
             user1 = request_data.get("user1")
             user2 = request_data.get("user2")
             limit = request_data.get("limit", 50)
+            offset = request_data.get("offset", 0)
 
             if not all([user1, user2]):
                 return {"success": False, "message": "Missing user parameters"}
@@ -116,13 +117,25 @@ class Chat1v1Handler:
             from database.db import db
             # Nếu user1/user2 là id, dùng trực tiếp, nếu là username thì cần truy vấn id
             # Ở đây giả sử là id
+            
+            # First get total count of messages
+            count_query = (
+                "SELECT COUNT(*) as total "
+                "FROM private_messages "
+                "WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s)"
+            )
+            count_params = (user1, user2, user2, user1)
+            count_result = await db.fetch_one(count_query, count_params)
+            total_messages = count_result["total"] if count_result else 0
+            
+            # Then get the paginated messages
             query = (
                 "SELECT sender_id, receiver_id, content, time_send, is_read, read_at "
                 "FROM private_messages "
                 "WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s) "
-                "ORDER BY time_send DESC LIMIT %s"
+                "ORDER BY time_send DESC LIMIT %s OFFSET %s"
             )
-            params = (user1, user2, user2, user1, limit)
+            params = (user1, user2, user2, user1, limit, offset)
             rows = await db.fetch_all(query, params)
             messages = []
             for row in rows:
@@ -139,7 +152,10 @@ class Chat1v1Handler:
                 "data": {
                     "chat_id": f"{user1}_{user2}",
                     "messages": list(reversed(messages)),  # đảo ngược để hiển thị từ cũ đến mới
-                    "total_count": len(messages),
+                    "total_count": total_messages,  # Total count of all messages in conversation
+                    "current_count": len(messages),  # Count of messages in this response
+                    "offset": offset,
+                    "limit": limit,
                 },
             }
         except Exception as e:

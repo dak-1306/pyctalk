@@ -16,6 +16,13 @@ class Chat1v1Logic(QObject):
         self._signal_connected = False
         self._realtime_connected = False
 
+        # Lazy loading settings
+        self.messages_per_load = 15  # Load 15 messages at a time
+        self.total_messages_loaded = 0
+        self.has_more_messages = True
+        self.is_loading_more = False
+        self.loading_lock = asyncio.Lock()
+
         # kết nối signal UI → logic
         self._connect_signals()
         
@@ -117,37 +124,69 @@ class Chat1v1Logic(QObject):
         self._connect_realtime_signals()
 
     async def load_message_history(self):
+        """Load initial messages with lazy loading and spinner"""
         try:
-            print(f"[DEBUG][Chat1v1Logic] Gọi get_chat_history với user_id={self.current_user_id}, friend_id={self.friend_id}")
-            resp = await self.api_client.get_chat_history(self.current_user_id, self.friend_id)
+            # Show loading spinner
+            if hasattr(self.ui, 'show_loading_spinner'):
+                self.ui.show_loading_spinner("Đang tải tin nhắn...")
+            
+            print(f"[DEBUG][Chat1v1Logic] Loading initial {self.messages_per_load} messages...")
+            
+            # Load with limit for lazy loading
+            resp = await self.api_client.get_chat_history(
+                self.current_user_id, 
+                self.friend_id, 
+                limit=self.messages_per_load
+            )
+            
             print(f"[DEBUG][Chat1v1Logic] Response lịch sử: {resp}")
-            # Phản hồi server có thể là resp['data']['messages']
+            
+            # Parse messages
             messages = []
+            total_count = 0
             if resp:
                 if 'messages' in resp:
                     messages = resp['messages']
+                    total_count = resp.get('total_count', len(messages))
                 elif 'data' in resp and 'messages' in resp['data']:
                     messages = resp['data']['messages']
+                    total_count = resp['data'].get('total_count', len(messages))
             
+            # Update lazy loading state
+            self.total_messages_loaded = len(messages)
+            
+            # Determine if there are more messages
+            # If we got fewer messages than requested, there are no more
+            # If total_count is available and accurate, use it
+            if len(messages) < self.messages_per_load:
+                self.has_more_messages = False
+            elif total_count > 0:
+                self.has_more_messages = self.total_messages_loaded < total_count
+            else:
+                # Fallback: assume there might be more if we got exactly the requested amount
+                self.has_more_messages = len(messages) == self.messages_per_load
+            
+            print(f"[DEBUG][Chat1v1Logic] Initial load: loaded={len(messages)}, total_loaded={self.total_messages_loaded}, total_count={total_count}, has_more={self.has_more_messages}")
+            
+            # Clear UI and show messages with batch animation
             self.ui.clear_messages()
+            
+            # Hide loading spinner
+            if hasattr(self.ui, 'hide_loading_spinner'):
+                self.ui.hide_loading_spinner()
             
             # If no messages, show friendship message
             if not messages:
                 self.ui.add_system_message("🎉 Các bạn đã là bạn bè với nhau! Hãy bắt đầu trò chuyện!")
             else:
-                for m in messages:
-                    sender_id = int(m.get("user_id") or m.get("from"))
-                    content = m.get("message", "")
-                    timestamp = m.get("timestamp", None)
-                    is_read = m.get("is_read", None)  # Get read status from server
-                    print(f"[DEBUG][Chat1v1Logic] Thêm message: sender_id={sender_id}, content={content}, timestamp={timestamp}, is_read={is_read}")
-                    
-                    # For sent messages, pass read status; for received messages, don't show status
-                    message_is_read = is_read if sender_id == self.current_user_id else None
-                    self.ui.add_message(content, sender_id == self.current_user_id, timestamp, None, message_is_read)
+                # Add messages with batch animation (reverse order for chat history)
+                await self._animate_initial_messages(messages)
+            
+            # Set up scroll detection for lazy loading
+            if hasattr(self.ui, 'setup_scroll_loading'):
+                self.ui.setup_scroll_loading(self._load_more_messages)
             
             # Only mark messages as read if there are unread messages from friend
-            # This will trigger the real-time "messages_read" notification
             has_unread_from_friend = any(
                 not m.get("is_read", False) and int(m.get("user_id") or m.get("from")) == self.friend_id 
                 for m in messages
@@ -157,7 +196,105 @@ class Chat1v1Logic(QObject):
                 print(f"[DEBUG][Chat1v1Logic] Marked unread messages from friend {self.friend_id} as read")
                     
         except Exception as e:
+            # Hide loading spinner on error
+            if hasattr(self.ui, 'hide_loading_spinner'):
+                self.ui.hide_loading_spinner()
             print("[ERROR] load_message_history:", e)
+
+    async def _animate_initial_messages(self, messages):
+        """Animate loading of initial messages"""
+        batch_size = 3  # Load 3 messages at a time
+        delay_between_batches = 100  # 100ms delay
+        
+        for i in range(0, len(messages), batch_size):
+            batch = messages[i:i + batch_size]
+            
+            for m in batch:
+                sender_id = int(m.get("user_id") or m.get("from"))
+                content = m.get("message", "")
+                timestamp = m.get("timestamp", None)
+                is_read = m.get("is_read", None)
+                
+                # For sent messages, pass read status; for received messages, don't show status
+                message_is_read = is_read if sender_id == self.current_user_id else None
+                self.ui.add_message(content, sender_id == self.current_user_id, timestamp, None, message_is_read)
+            
+            # Small delay between batches for smooth effect
+            if i + batch_size < len(messages):
+                await asyncio.sleep(delay_between_batches / 1000.0)
+
+    async def _load_more_messages(self):
+        """Load more older messages when scrolling to top"""
+        async with self.loading_lock:
+            if self.is_loading_more or not self.has_more_messages:
+                print(f"[DEBUG][Chat1v1Logic] Skipping load more: is_loading={self.is_loading_more}, has_more={self.has_more_messages}")
+                return
+                
+            self.is_loading_more = True
+            print(f"[DEBUG][Chat1v1Logic] Loading more messages, offset={self.total_messages_loaded}")
+            
+            try:
+                # Show loading indicator
+                if hasattr(self.ui, 'show_loading_bar'):
+                    self.ui.show_loading_bar()
+                
+                print(f"[DEBUG][Chat1v1Logic] Calling get_chat_history with user1={self.current_user_id}, user2={self.friend_id}, limit={self.messages_per_load}, offset={self.total_messages_loaded}")
+                
+                # Load more messages with offset
+                resp = await self.api_client.get_chat_history(
+                    self.current_user_id,
+                    self.friend_id,
+                    limit=self.messages_per_load,
+                    offset=self.total_messages_loaded
+                )
+                
+                print(f"[DEBUG][Chat1v1Logic] Server response: {resp}")
+                
+                if resp:
+                    messages = []
+                    total_count = 0
+                    if 'messages' in resp:
+                        messages = resp['messages']
+                        total_count = resp.get('total_count', 0)
+                    elif 'data' in resp and 'messages' in resp['data']:
+                        messages = resp['data']['messages']
+                        total_count = resp['data'].get('total_count', 0)
+                    
+                    print(f"[DEBUG][Chat1v1Logic] Extracted {len(messages)} messages from response, total_count={total_count}")
+                    
+                    if messages:
+                        # Prepend older messages to UI
+                        if hasattr(self.ui, 'prepend_messages'):
+                            print(f"[DEBUG][Chat1v1Logic] Calling prepend_messages with {len(messages)} messages")
+                            self.ui.prepend_messages(messages)
+                        
+                        self.total_messages_loaded += len(messages)
+                        
+                        # Determine if there are more messages
+                        if len(messages) < self.messages_per_load:
+                            self.has_more_messages = False
+                        elif total_count > 0:
+                            self.has_more_messages = self.total_messages_loaded < total_count
+                        else:
+                            # Fallback: assume there might be more if we got exactly the requested amount
+                            self.has_more_messages = len(messages) == self.messages_per_load
+                        
+                        print(f"[DEBUG][Chat1v1Logic] Loaded {len(messages)} more messages, total={self.total_messages_loaded}, total_count={total_count}, has_more={self.has_more_messages}")
+                    else:
+                        self.has_more_messages = False
+                        print(f"[DEBUG][Chat1v1Logic] No more messages to load")
+                else:
+                    print(f"[DEBUG][Chat1v1Logic] No response from server")
+                        
+            except Exception as e:
+                print(f"[ERROR][Chat1v1Logic] Failed to load more messages: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self.is_loading_more = False
+                # Hide loading indicator
+                if hasattr(self.ui, 'hide_loading_bar'):
+                    self.ui.hide_loading_bar()
 
     async def send_message(self, text):
         try:

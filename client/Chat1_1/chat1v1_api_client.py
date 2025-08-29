@@ -3,11 +3,12 @@ class Chat1v1APIClient:
     def __init__(self, pyctalk_client):
         self.client = pyctalk_client
 
-    async def get_chat_history(self, user_id, friend_id, limit=50):
+    async def get_chat_history(self, user_id, friend_id, limit=50, offset=0):
         return await self.client.send_request("get_chat_history", {
             "user1": user_id,
             "user2": friend_id,
-            "limit": limit
+            "limit": limit,
+            "offset": offset
         })
 
     async def send_message(self, user_id, friend_id, content):
