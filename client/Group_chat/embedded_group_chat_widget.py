@@ -399,6 +399,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         dialog = GroupManagementDialog(
             group_data=self.group_data,
             current_user_id=self.user_id,
+            username=self.username,
             client=self.api_client,  # Truyền api_client thay vì connection
             parent=self
         )

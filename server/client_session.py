@@ -282,6 +282,18 @@ class ClientSession:
                 result = await self.group_handler.remove_member(group_id, admin_id, member_id)
                 await self.send_response(result, request_id)
 
+            elif action == "add_friend_to_group":
+                group_id = data["data"]["group_id"]
+                friend_id = data["data"]["friend_id"]
+                added_by = data["data"]["added_by"]
+                result = await self.group_handler.add_friend_to_group(group_id, friend_id, added_by)
+                await self.send_response(result, request_id)
+
+            elif action == "get_user_friends":
+                user_id = data["data"]["user_id"]
+                result = await self.group_handler.get_user_friends(user_id)
+                await self.send_response(result, request_id)
+
             elif action == "send_message" and self.chat1v1_handler:
                 print(f"[DEBUG] Server received send_message: {data}")
                 result = await self.chat1v1_handler.handle_message_request(self.reader, self.writer, data)

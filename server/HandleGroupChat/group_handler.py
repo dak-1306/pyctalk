@@ -78,7 +78,7 @@ class GroupHandler:
             return {"status": "error", "message": f"Lỗi tạo nhóm: {str(e)}"}
 
     async def add_member_to_group(self, group_id: int, user_id: int, added_by: int) -> dict:
-        """Thêm thành viên vào nhóm"""
+        """Thêm thành viên vào nhóm (chỉ admin)"""
         try:
             group_info = await db.fetch_one("SELECT created_by FROM group_chat WHERE group_id = %s", (group_id,))
             if not group_info or group_info["created_by"] != added_by:
@@ -104,6 +104,50 @@ class GroupHandler:
             return {"success": True, "message": f"Đã thêm {user_info['username']} vào nhóm"}
         except Exception as e:
             return {"success": False, "message": f"Lỗi thêm thành viên: {str(e)}"}
+
+    async def add_friend_to_group(self, group_id: int, friend_id: int, added_by: int) -> dict:
+        """Thêm bạn bè vào nhóm (tất cả thành viên đều có thể thêm bạn của họ)"""
+        try:
+            # Kiểm tra người thêm có phải thành viên của nhóm không
+            member_check = await db.fetch_one(
+                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, added_by)
+            )
+            if not member_check:
+                return {"success": False, "message": "Bạn không phải thành viên của nhóm này"}
+
+            # Kiểm tra friend_id có phải bạn bè của added_by không
+            friendship_check = await db.fetch_one(
+                """SELECT user1_id FROM friendship 
+                   WHERE (user1_id = %s AND user2_id = %s) OR (user1_id = %s AND user2_id = %s)
+                   AND status = 'accepted'""",
+                (added_by, friend_id, friend_id, added_by)
+            )
+            if not friendship_check:
+                return {"success": False, "message": "Bạn chỉ có thể thêm những người trong danh sách bạn bè của mình"}
+
+            # Kiểm tra friend_id có tồn tại không
+            user_exists = await db.fetch_one("SELECT id, username FROM users WHERE id = %s", (friend_id,))
+            if not user_exists:
+                return {"success": False, "message": "Người dùng không tồn tại"}
+
+            # Kiểm tra đã là thành viên chưa
+            already_member = await db.fetch_one(
+                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, friend_id)
+            )
+            if already_member:
+                return {"success": False, "message": f"{user_exists['username']} đã là thành viên của nhóm"}
+
+            # Thêm vào nhóm với role member
+            await db.execute(
+                "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'member')",
+                (group_id, friend_id)
+            )
+
+            return {"success": True, "message": f"Đã thêm {user_exists['username']} vào nhóm"}
+        except Exception as e:
+            return {"success": False, "message": f"Lỗi thêm bạn bè vào nhóm: {str(e)}"}
 
     async def send_group_message(self, sender_id: int, group_id: int, content: str) -> dict:
         """Gửi tin nhắn nhóm"""
@@ -405,6 +449,40 @@ class GroupHandler:
         """Chuyển quyền trưởng nhóm (alias cho transfer_admin)"""
         return await self.transfer_admin(group_id, current_admin_id, new_admin_id)
 
+    async def get_user_friends(self, user_id: int) -> dict:
+        """Lấy danh sách bạn bè của user"""
+        try:
+            friends = await db.fetch_all("""
+                SELECT CASE 
+                    WHEN f.user1_id = %s THEN f.user2_id 
+                    ELSE f.user1_id 
+                END as friend_id,
+                CASE 
+                    WHEN f.user1_id = %s THEN u2.username 
+                    ELSE u1.username 
+                END as friend_name
+                FROM friendship f
+                LEFT JOIN users u1 ON f.user1_id = u1.id  
+                LEFT JOIN users u2 ON f.user2_id = u2.id
+                WHERE (f.user1_id = %s OR f.user2_id = %s) AND f.status = 'accepted'
+                ORDER BY friend_name
+            """, (user_id, user_id, user_id, user_id))
+            
+            return {
+                "status": "ok",
+                "friends": [
+                    {
+                        "friend_id": friend["friend_id"],
+                        "friend_name": friend["friend_name"]
+                    }
+                    for friend in friends
+                ]
+            }
+            
+        except Exception as e:
+            print(f"❌ Lỗi get_user_friends: {e}")
+            return {"status": "error", "message": str(e)}
+
     async def remove_member(self, group_id: int, admin_id: int, member_id: int) -> dict:
         """Admin kick thành viên khỏi nhóm"""
         try:
@@ -440,4 +518,46 @@ class GroupHandler:
             
         except Exception as e:
             print(f"❌ Lỗi remove_member: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def add_friend_to_group(self, group_id: int, friend_id: int, added_by: int) -> dict:
+        """Thêm bạn bè vào nhóm (mọi thành viên đều có thể thêm bạn bè của họ)"""
+        try:
+            # Kiểm tra người thêm có trong nhóm không
+            adder_check = await db.fetch_one(
+                "SELECT role FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, added_by)
+            )
+            
+            if not adder_check:
+                return {"status": "error", "message": "Bạn không phải thành viên của nhóm này"}
+            
+            # Kiểm tra friend_id có phải bạn bè của added_by không
+            friendship_check = await db.fetch_one(
+                "SELECT id FROM friends WHERE (user1_id = %s AND user2_id = %s) OR (user1_id = %s AND user2_id = %s)",
+                (added_by, friend_id, friend_id, added_by)
+            )
+            
+            if not friendship_check:
+                return {"status": "error", "message": "Chỉ có thể thêm bạn bè của bạn vào nhóm"}
+            
+            # Kiểm tra friend đã trong nhóm chưa
+            existing_member = await db.fetch_one(
+                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, friend_id)
+            )
+            
+            if existing_member:
+                return {"status": "error", "message": "Người này đã là thành viên của nhóm"}
+            
+            # Thêm friend vào nhóm với role member
+            await db.execute(
+                "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'member')",
+                (group_id, friend_id)
+            )
+            
+            return {"status": "ok", "message": "Đã thêm bạn bè vào nhóm thành công"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi add_friend_to_group: {e}")
             return {"status": "error", "message": str(e)}

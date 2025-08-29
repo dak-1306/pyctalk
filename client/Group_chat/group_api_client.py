@@ -75,6 +75,20 @@ class GroupAPIClient:
             "member_id": member_id
         })
 
+    async def add_friend_to_group(self, group_id: str, friend_id: str, added_by: str):
+        """Thêm bạn bè vào nhóm"""
+        return await self._send("add_friend_to_group", {
+            "group_id": group_id,
+            "friend_id": friend_id,
+            "added_by": added_by
+        })
+
+    async def get_user_friends(self, username: str):
+        """Lấy danh sách bạn bè của user"""
+        return await self._send("get_friends", {
+            "username": username
+        })
+
     async def _send(self, action: str, data: dict):
         """Helper async để gửi request"""
         try:

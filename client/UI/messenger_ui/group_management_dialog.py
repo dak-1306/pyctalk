@@ -1,14 +1,16 @@
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtCore import QTimer
 import asyncio
+from .add_friend_to_group_dialog import AddFriendToGroupDialog
 
 class GroupManagementDialog(QtWidgets.QDialog):
     """Dialog quản lý thành viên nhóm và quyền trưởng nhóm"""
     
-    def __init__(self, group_data, current_user_id, client, parent=None):
+    def __init__(self, group_data, current_user_id, username, client, parent=None):
         super().__init__(parent)
         self.group_data = group_data
         self.current_user_id = current_user_id
+        self.username = username
         self.client = client
         self.members = []
         self.current_user_role = "member"
@@ -54,6 +56,12 @@ class GroupManagementDialog(QtWidgets.QDialog):
         
         # Action buttons
         buttons_layout = QtWidgets.QHBoxLayout()
+        
+        # Thêm bạn bè button (tất cả thành viên đều có thể thêm)
+        self.add_friend_btn = QtWidgets.QPushButton("Thêm bạn bè")
+        self.add_friend_btn.clicked.connect(self.add_friend_to_group)
+        self.add_friend_btn.setStyleSheet("QPushButton { background-color: #28a745; color: white; }")
+        buttons_layout.addWidget(self.add_friend_btn)
         
         self.leave_btn = QtWidgets.QPushButton("Rời nhóm")
         self.leave_btn.clicked.connect(self.leave_group)
@@ -245,3 +253,19 @@ class GroupManagementDialog(QtWidgets.QDialog):
             
             loop = asyncio.get_event_loop()
             loop.create_task(do_leave())
+
+    def add_friend_to_group(self):
+        """Mở dialog thêm bạn bè vào nhóm"""
+        dialog = AddFriendToGroupDialog(
+            self.group_data.get('group_id'),
+            self.group_data.get('group_name'),
+            self.current_user_id,
+            self.username,
+            self.client,
+            self
+        )
+        
+        # Connect signal để refresh member list khi thêm thành công
+        dialog.member_added.connect(self.load_group_members)
+        
+        dialog.exec()
