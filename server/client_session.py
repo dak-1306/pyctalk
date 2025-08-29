@@ -324,6 +324,11 @@ class ClientSession:
                 result = await self.chat1v1_handler.handle_message_request(self.reader, self.writer, data)
                 await self.send_response(result, request_id)
 
+            elif action == "send_file_message" and self.chat1v1_handler:
+                print(f"[DEBUG] Server received send_file_message: {data}")
+                result = await self.chat1v1_handler.handle_message_request(self.reader, self.writer, data)
+                await self.send_response(result, request_id)
+
             elif action == "get_user_profile":
                 if self.user_profile_handler:
                     print(f"[DEBUG] Processing get_user_profile action with handler: {self.user_profile_handler}")
