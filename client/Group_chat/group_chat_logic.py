@@ -21,8 +21,8 @@ class GroupChatLogic:
         # Debug log để kiểm tra thông tin user
         print(f"[DEBUG] GroupChatLogic init: user_id={user_id}, username='{username}'")
 
-        # Kết nối tín hiệu từ UI
-        self.ui.group_selected.connect(self.handle_group_selected)
+        # Kết nối tín hiệu từ UI với wrapper sync function
+        self.ui.group_selected.connect(self._handle_group_selected_sync)
         self.ui.message_send_requested.connect(self.send_message)
         
         # Connect real-time group message signals
@@ -98,6 +98,11 @@ class GroupChatLogic:
     # ---------------------------
     # Chọn nhóm
     # ---------------------------
+    def _handle_group_selected_sync(self, item):
+        """Sync wrapper for async handle_group_selected"""
+        import asyncio
+        asyncio.create_task(self.handle_group_selected(item))
+    
     async def handle_group_selected(self, item):
         """Xử lý khi UI chọn 1 nhóm"""
         group_data = item.data(QtCore.Qt.ItemDataRole.UserRole)
@@ -131,7 +136,12 @@ class GroupChatLogic:
                 self.display_messages(messages, offset, self.username)
             else:
                 print(f"[GroupChatLogic][ERROR] Không thể tải tin nhắn: {response.get('message')}")
-                QMessageBox.warning(self.ui, "Lỗi", response.get("message", "Không thể tải tin nhắn"))    # ---------------------------
+                # If user is not a member anymore, don't show error dialog repeatedly
+                error_msg = response.get('message', '')
+                if 'không phải thành viên' in error_msg:
+                    print(f"[GroupChatLogic][INFO] User no longer in group, stopping message loading")
+                    return
+                QMessageBox.warning(self.ui, "Lỗi", error_msg)    # ---------------------------
     # Hiển thị tin nhắn
     # ---------------------------
     def display_messages(self, messages, offset, username):

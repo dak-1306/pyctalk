@@ -1197,12 +1197,43 @@ class Ui_MainWindow(QtCore.QObject):
         # Thêm khung chat nhóm mới
         print(f"[DEBUG] Creating EmbeddedGroupChatWidget with user_id={self.user_id}, username='{self.username}'")
         chat_widget = EmbeddedGroupChatWidget(self.client, self.user_id, self.username, group_data)
+        
+        # Connect signal để handle khi user rời nhóm
+        if hasattr(chat_widget, 'group_selected'):
+            chat_widget.group_selected.connect(self._handle_group_action)
+        
         self.main_layout.addWidget(chat_widget, 1)
         # Luôn reload lại tin nhắn khi chuyển nhóm
         if hasattr(chat_widget, 'logic'):
             import asyncio
             asyncio.create_task(chat_widget.logic.load_group_messages(offset=0))
     
+    def _handle_group_action(self, action_data):
+        """Handle actions from group chat widget (like user left group)"""
+        action = action_data.get("action")
+        if action == "user_left_group":
+            # Refresh group list when user leaves a group (use async task)
+            if hasattr(self.sidebar, 'groups_list') and hasattr(self.sidebar.groups_list, '_load_groups'):
+                import asyncio
+                asyncio.create_task(self.sidebar.groups_list._load_groups())
+            
+            # Clear current chat area and show welcome screen
+            widgets_to_remove = []
+            for i in range(self.main_layout.count()):
+                widget = self.main_layout.itemAt(i).widget()
+                if widget and getattr(widget, 'objectName', lambda: None)() != "topbar":
+                    widgets_to_remove.append(widget)
+            for widget in widgets_to_remove:
+                self.main_layout.removeWidget(widget)
+                try:
+                    widget.hide()
+                    widget.deleteLater()
+                except RuntimeError:
+                    pass
+            
+            # Show welcome screen again
+            self._setup_main_card()
+
     def closeEvent(self, event):
         """Handle window close event"""
         if self.settings.get("minimize_to_tray", True) and self.notification_manager.tray_icon:

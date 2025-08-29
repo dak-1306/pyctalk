@@ -49,11 +49,37 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         try:
             if getattr(self.logic, "current_group", None):
                 import asyncio
-                asyncio.create_task(self.logic.load_group_messages(offset=0))
-                # Cũng reload thông tin thành viên
-                asyncio.create_task(self.load_group_members())
+                # Check if user is still a member before loading messages
+                asyncio.create_task(self._check_membership_and_load())
         except Exception as e:
             logger.error(f"[EmbeddedGroupChatWidget] Lỗi reload tin nhắn: {e}")
+
+    async def _check_membership_and_load(self):
+        """Check if user is still a group member before loading data"""
+        try:
+            # First check group members
+            response = await self.api_client.get_group_members(
+                str(self.group_data.get('group_id')),
+                str(self.user_id)
+            )
+            
+            if response and response.get("status") == "ok":
+                members = response.get("members", [])
+                # Check if current user is in the members list
+                user_in_group = any(int(member["user_id"]) == int(self.user_id) for member in members)
+                
+                if user_in_group:
+                    # User is still in group, safe to load messages
+                    await self.logic.load_group_messages(offset=0)
+                    await self.load_group_members()
+                else:
+                    print(f"[DEBUG] User {self.user_id} no longer in group {self.group_data.get('group_id')}")
+                    # Clear messages and show info
+                    self.clear_messages()
+            else:
+                print(f"[DEBUG] Failed to check group membership: {response}")
+        except Exception as e:
+            print(f"[ERROR] _check_membership_and_load: {e}")
 
     def add_message(self, message, is_sent, timestamp=None, sender_name=None, show_sender_name=False):
         """Thêm một message bubble vào UI với timestamp logic giống Messenger"""
@@ -380,7 +406,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         # Refresh group members when dialog closes
         result = dialog.exec()
         if result == QtWidgets.QDialog.DialogCode.Accepted:
-            # User left the group, need to handle this in parent
+            # User left the group, emit signal to refresh group list
             self.group_selected.emit({"action": "user_left_group", "group_id": self.group_data.get('group_id')})
         else:
             # Just refresh members info
