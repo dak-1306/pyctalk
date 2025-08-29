@@ -225,14 +225,14 @@ class FilePreviewWidget(QWidget):
         layout.setContentsMargins(10, 5, 10, 5)
         layout.setSpacing(10)
         
-        # Preview container
+        # Preview container with improved styling
         preview_frame = QFrame()
         preview_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 5px;
+                background-color: rgba(102, 126, 234, 0.05);
+                border: 1px solid rgba(102, 126, 234, 0.2);
+                border-radius: 12px;
+                padding: 2px;
             }
         """)
         
@@ -242,7 +242,7 @@ class FilePreviewWidget(QWidget):
         
         # File icon or thumbnail
         icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)
+        icon_label.setFixedSize(48, 48)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         if self.file_type == 'image' and os.path.exists(self.file_path):
@@ -251,26 +251,38 @@ class FilePreviewWidget(QWidget):
                 pixmap = QPixmap(self.file_path)
                 if not pixmap.isNull():
                     scaled_pixmap = pixmap.scaled(
-                        40, 40, 
+                        48, 48, 
                         Qt.AspectRatioMode.KeepAspectRatio, 
                         Qt.TransformationMode.SmoothTransformation
                     )
                     icon_label.setPixmap(scaled_pixmap)
+                    # Add subtle border for images
+                    icon_label.setStyleSheet("""
+                        QLabel {
+                            border-radius: 6px;
+                            border: 1px solid rgba(102, 126, 234, 0.3);
+                        }
+                    """)
                 else:
                     icon_label.setText("🖼️")
-                    icon_label.setFont(QFont("Segoe UI", 16))
+                    icon_label.setFont(QFont("Segoe UI", 18))
+                    icon_label.setStyleSheet("color: #667eea;")
             except:
                 icon_label.setText("🖼️")
-                icon_label.setFont(QFont("Segoe UI", 16))
+                icon_label.setFont(QFont("Segoe UI", 18))
+                icon_label.setStyleSheet("color: #667eea;")
         else:
             # Show appropriate icon for other file types
             if self.file_type == 'audio':
                 icon_label.setText("🎵")
+                icon_label.setStyleSheet("color: #28a745;")
             elif self.file_type == 'video':
                 icon_label.setText("🎬")
+                icon_label.setStyleSheet("color: #dc3545;")
             else:
                 icon_label.setText("📎")
-            icon_label.setFont(QFont("Segoe UI", 16))
+                icon_label.setStyleSheet("color: #6c757d;")
+            icon_label.setFont(QFont("Segoe UI", 18))
             
         preview_layout.addWidget(icon_label)
         
@@ -280,15 +292,16 @@ class FilePreviewWidget(QWidget):
         
         # File name
         name_label = QLabel(self.file_name)
-        name_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        name_label.setStyleSheet("color: #333;")
+        name_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        name_label.setStyleSheet("color: #333; max-width: 150px;")
+        name_label.setWordWrap(True)
         info_layout.addWidget(name_label)
         
         # File size
         size_text = self._format_file_size(self.file_size)
         size_label = QLabel(size_text)
         size_label.setFont(QFont("Segoe UI", 9))
-        size_label.setStyleSheet("color: #666;")
+        size_label.setStyleSheet("color: #888;")
         info_layout.addWidget(size_label)
         
         preview_layout.addLayout(info_layout)
@@ -296,19 +309,24 @@ class FilePreviewWidget(QWidget):
         
         # Remove button
         remove_btn = QPushButton("✕")
-        remove_btn.setFixedSize(25, 25)
-        remove_btn.setFont(QFont("Segoe UI", 12))
+        remove_btn.setFixedSize(28, 28)
+        remove_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         remove_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         remove_btn.clicked.connect(self.remove_file.emit)
         remove_btn.setStyleSheet("""
             QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 12px;
+                background-color: rgba(220, 53, 69, 0.1);
+                color: #dc3545;
+                border: 1px solid rgba(220, 53, 69, 0.3);
+                border-radius: 14px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c82333;
+                background-color: rgba(220, 53, 69, 0.2);
+                border-color: rgba(220, 53, 69, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(220, 53, 69, 0.3);
             }
         """)
         preview_layout.addWidget(remove_btn)

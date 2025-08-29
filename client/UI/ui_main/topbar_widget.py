@@ -28,27 +28,10 @@ class TopBarWidget(QtWidgets.QFrame):
         tb_layout = QtWidgets.QHBoxLayout(self)
         tb_layout.setContentsMargins(16, 10, 16, 10)
 
-        # App branding
-        branding_layout = QtWidgets.QHBoxLayout()
-        self.logo_label = QtWidgets.QLabel()
-        logo_pixmap = QtGui.QPixmap(32, 32)
-        logo_pixmap.fill(QtGui.QColor('#3b82f6'))
-        self.logo_label.setPixmap(logo_pixmap)
-        self.logo_label.setFixedSize(32, 32)
-        self.app_name = QtWidgets.QLabel("PycTalk")
-        self.app_name.setFont(QtGui.QFont("Arial", 16, QtGui.QFont.Weight.Bold))
-        branding_layout.addWidget(self.logo_label)
-        branding_layout.addWidget(self.app_name)
-        branding_layout.addStretch()
-        tb_layout.addLayout(branding_layout)
-
-        # Status indicator
-        self.status_indicator = QtWidgets.QLabel("🔴 Chưa kết nối")
-        self.status_indicator.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        tb_layout.addWidget(self.status_indicator)
+        # Spacer để căn giữa
         tb_layout.addStretch()
 
-        # User info and controls
+        # User info and controls (đơn giản hóa)
         user_container = QtWidgets.QFrame()
         user_container.setStyleSheet("""
             QFrame {
@@ -88,11 +71,12 @@ class TopBarWidget(QtWidgets.QFrame):
         user_layout.addWidget(self.avatar_label)
         user_layout.addWidget(self.username_label)
         
-        # Make the whole user container clickable (only one event handler)
+        # Make the whole user container clickable
         user_container.mousePressEvent = lambda event: self.avatar_clicked.emit() if event.button() == QtCore.Qt.MouseButton.LeftButton else None
         
         tb_layout.addWidget(user_container)
 
+        # Theme toggle button (giữ lại vì hữu ích)
         self.btnThemeToggle = QtWidgets.QPushButton("🌙")
         self.btnThemeToggle.setFixedSize(36, 36)
         self.btnThemeToggle.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))

@@ -42,14 +42,8 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.selected_file_path = None
         self.selected_file_type = None
         self.current_file_preview = None
-
-        # Track theme mode
-        self.is_dark_mode = False
         
         self._setupUI()
-        
-        # Set overall widget styling với theme support
-        self._apply_theme()
         
         # Thiết lập nhóm hiện tại và load tin nhắn với lazy loading
         self.logic.current_group = group_data
@@ -223,7 +217,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         group_header_layout.addWidget(self.back_btn)
 
         # Group avatar (circle với initial)
-        group_initial = self.group_data.get('name', 'Group')[0].upper()
+        group_initial = self.group_data.get('group_name', 'Group')[0].upper()
         group_avatar = QtWidgets.QLabel(group_initial)
         group_avatar.setFixedSize(50, 50)
         group_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -238,7 +232,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         """)
         group_header_layout.addWidget(group_avatar)
 
-        self.group_info_label = QtWidgets.QLabel(self.group_data.get('name', 'Group'))
+        self.group_info_label = QtWidgets.QLabel(self.group_data.get('group_name', 'Group'))
         self.group_info_label.setStyleSheet("""
             QLabel {
                 color: white;
@@ -250,25 +244,6 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         group_header_layout.addWidget(self.group_info_label)
 
         group_header_layout.addStretch()
-
-        # Theme toggle button (giữ lại tính năng nâng cao)
-        self.theme_toggle_btn = QtWidgets.QPushButton("🌙")
-        self.theme_toggle_btn.setFixedSize(40, 40)
-        self.theme_toggle_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: white;
-                border: none;
-                border-radius: 20px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-            }
-        """)
-        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
-        self.theme_toggle_btn.setToolTip("Chuyển đổi chế độ sáng/tối")
-        group_header_layout.addWidget(self.theme_toggle_btn)
 
         # Group management button
         self.manage_group_btn = QtWidgets.QPushButton("⚙️")
@@ -529,218 +504,6 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         if hasattr(self, 'loading_bar'):
             self.loading_bar.show()
     
-    def _apply_theme(self):
-        """Áp dụng theme (light/dark) cho toàn bộ widget"""
-        if self.is_dark_mode:
-            self.setStyleSheet("""
-                EmbeddedGroupChatWidget {
-                    background-color: #1a1a1a;
-                    border: none;
-                    color: #ffffff;
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                EmbeddedGroupChatWidget {
-                    background-color: #ffffff;
-                    border: none;
-                    color: #1a1a1a;
-                }
-            """)
-        
-        # Update các component khác
-        self._update_component_themes()
-
-    def _update_component_themes(self):
-        """Cập nhật theme cho các component con"""
-        if self.is_dark_mode:
-            # Update theme toggle button
-            self.theme_toggle_btn.setText("☀️")
-            self.theme_toggle_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    color: #ffffff;
-                    border: none;
-                    border-radius: 18px;
-                    font-size: 16px;
-                    padding: 0px;
-                }
-                QPushButton:hover {
-                    background-color: #404040;
-                }
-                QPushButton:pressed {
-                    background-color: #555555;
-                }
-            """)
-            
-            # Header
-            self.group_info_label.setStyleSheet("""
-                QLabel {
-                    font-weight: bold; 
-                    font-size: 16px;
-                    color: #ffffff;
-                    padding: 0px;
-                }
-            """)
-            
-            # Members info
-            self.members_info_label.setStyleSheet("""
-                QLabel {
-                    color: #b0b0b0; 
-                    padding: 8px 16px; 
-                    font-size: 12px; 
-                    background-color: #2a2a2a;
-                    border-bottom: 1px solid #404040;
-                    margin: 0px;
-                }
-            """)
-            
-            # Scroll area
-            self.scroll_area.setStyleSheet("""
-                QScrollArea {
-                    background-color: #1a1a1a;
-                    border: none;
-                }
-                QScrollBar:vertical {
-                    background-color: #2a2a2a;
-                    width: 8px;
-                    border-radius: 4px;
-                    margin: 0px;
-                }
-                QScrollBar::handle:vertical {
-                    background-color: #555555;
-                    border-radius: 4px;
-                    min-height: 20px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background-color: #777777;
-                }
-            """)
-            
-            # Emoji button
-            self.emoji_button.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: none;
-                    border-radius: 18px;
-                    font-size: 18px;
-                    padding: 0px;
-                }
-                QPushButton:hover {
-                    background-color: #404040;
-                }
-                QPushButton:pressed {
-                    background-color: #555555;
-                }
-            """)
-            
-            # Typing indicator
-            self.typing_indicator.setStyleSheet("""
-                QLabel {
-                    color: #b0b0b0;
-                    font-size: 12px;
-                    font-style: italic;
-                    padding: 0px 8px;
-                }
-            """)
-            
-        else:
-            # Update theme toggle button
-            self.theme_toggle_btn.setText("🌙")
-            self.theme_toggle_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    color: #666666;
-                    border: none;
-                    border-radius: 18px;
-                    font-size: 16px;
-                    padding: 0px;
-                }
-                QPushButton:hover {
-                    background-color: #f7f8fa;
-                }
-                QPushButton:pressed {
-                    background-color: #e4e6ea;
-                }
-            """)
-            
-            # Light mode styles (giữ nguyên)
-            self.group_info_label.setStyleSheet("""
-                QLabel {
-                    font-weight: bold; 
-                    font-size: 16px;
-                    color: #1a1a1a;
-                    padding: 0px;
-                }
-            """)
-            
-            self.members_info_label.setStyleSheet("""
-                QLabel {
-                    color: #65676b; 
-                    padding: 8px 16px; 
-                    font-size: 12px; 
-                    background-color: #f7f8fa;
-                    border-bottom: 1px solid #e4e6ea;
-                    margin: 0px;
-                }
-            """)
-            
-            self.scroll_area.setStyleSheet("""
-                QScrollArea {
-                    background-color: #ffffff;
-                    border: none;
-                }
-                QScrollBar:vertical {
-                    background-color: #f7f8fa;
-                    width: 8px;
-                    border-radius: 4px;
-                    margin: 0px;
-                }
-                QScrollBar::handle:vertical {
-                    background-color: #c4c4c4;
-                    border-radius: 4px;
-                    min-height: 20px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background-color: #a8a8a8;
-                }
-            """)
-            
-            # Emoji button
-            self.emoji_button.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: none;
-                    border-radius: 18px;
-                    font-size: 18px;
-                    padding: 0px;
-                }
-                QPushButton:hover {
-                    background-color: #f7f8fa;
-                }
-                QPushButton:pressed {
-                    background-color: #e4e6ea;
-                }
-            """)
-            
-            # Typing indicator
-            self.typing_indicator.setStyleSheet("""
-                QLabel {
-                    color: #8a8d91;
-                    font-size: 12px;
-                    font-style: italic;
-                    padding: 0px 8px;
-                }
-            """)
-
-    def toggle_theme(self):
-        """Chuyển đổi giữa light/dark mode"""
-        self.is_dark_mode = not self.is_dark_mode
-        self._apply_theme()
-        
-        # Animate theme transition
-        self._animate_theme_transition()
-
     def _animate_theme_transition(self):
         """Animation cho việc chuyển theme"""
         try:
@@ -764,9 +527,6 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             bubble.setVisible(True)
             bubble.show()
             
-            # Apply theme to bubble
-            self._apply_theme_to_bubble(bubble)
-            
             # Skip animation for now to fix visibility issues
             print(f"[DEBUG] Message bubble animated and visible: {bubble.isVisible()}")
             
@@ -775,62 +535,6 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             # Fallback - just show bubble instantly
             bubble.setVisible(True)
             bubble.show()
-
-    def _apply_theme_to_bubble(self, bubble):
-        """Áp dụng theme cho message bubble"""
-        try:
-            # Update bubble styling based on theme
-            if hasattr(bubble, 'is_sent') and hasattr(bubble, 'setStyleSheet'):
-                if bubble.is_sent:
-                    if self.is_dark_mode:
-                        bubble.setStyleSheet("""
-                            QLabel {
-                                background-color: #0084FF;
-                                color: white;
-                                border-radius: 18px;
-                                padding: 10px 14px;
-                                font-size: 14px;
-                                line-height: 1.4;
-                            }
-                        """)
-                    else:
-                        bubble.setStyleSheet("""
-                            QLabel {
-                                background-color: #0084FF;
-                                color: white;
-                                border-radius: 18px;
-                                padding: 10px 14px;
-                                font-size: 14px;
-                                line-height: 1.4;
-                            }
-                        """)
-                else:
-                    if self.is_dark_mode:
-                        bubble.setStyleSheet("""
-                            QLabel {
-                                background-color: #333333;
-                                color: #ffffff;
-                                border-radius: 18px;
-                                padding: 10px 14px;
-                                font-size: 14px;
-                                line-height: 1.4;
-                                border: 1px solid #555555;
-                            }
-                        """)
-                    else:
-                        bubble.setStyleSheet("""
-                            QLabel {
-                                background-color: #f1f3f4;
-                                color: #1a1a1a;
-                                border-radius: 18px;
-                                padding: 10px 14px;
-                                font-size: 14px;
-                                line-height: 1.4;
-                                border: 1px solid #e4e6ea;
-                            }
-                        """)
-        except Exception as e:
-            print(f"[DEBUG] Failed to apply theme to bubble: {e}")
 
     def hide_loading_indicator(self):
         """Ẩn loading bar"""
@@ -1035,7 +739,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
     def update_group_info(self):
         """Cập nhật thông tin nhóm hiển thị - Đã được cập nhật để đồng bộ với chat 1-1"""
         if self.group_data:
-            group_name = self.group_data.get("name", "Unknown Group")
+            group_name = self.group_data.get("group_name", "Unknown Group")
             self.group_info_label.setText(group_name)  # Chỉ hiển thị tên nhóm, không có ID
 
     def _on_back_clicked(self):

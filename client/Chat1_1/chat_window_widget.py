@@ -10,16 +10,6 @@ from UI.messenger_ui.message_bubble_widget import MessageBubble
 from UI.messenger_ui.time_formatter import TimeFormatter
 
 class ChatWindow(QtWidgets.QWidget):
-    def showEvent(self, event):
-        """Reload lịch sử chat khi widget được hiển thị lại (quay lại bạn bè)"""
-        super().showEvent(event)
-        try:
-            if getattr(self.logic, "current_friend_id", None):
-                import asyncio
-                asyncio.create_task(self.logic.get_chat_history(self.logic.user_id, self.logic.current_friend_id))
-        except Exception as e:
-            import logging
-            logging.exception("Failed to reload chat history on showEvent: %s", e)
     """Individual chat window UI only"""
     back_clicked = pyqtSignal()
     message_send_requested = pyqtSignal(str)   # UI phát tín hiệu khi muốn gửi tin nhắn
@@ -48,6 +38,17 @@ class ChatWindow(QtWidgets.QWidget):
         
         self._setup_ui()
 
+    def showEvent(self, event):
+        """Reload lịch sử chat khi widget được hiển thị lại (quay lại bạn bè)"""
+        super().showEvent(event)
+        try:
+            if getattr(self.logic, "current_friend_id", None):
+                import asyncio
+                asyncio.create_task(self.logic.get_chat_history(self.logic.user_id, self.logic.current_friend_id))
+        except Exception as e:
+            import logging
+            logging.exception("Failed to reload chat history on showEvent: %s", e)
+
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
@@ -60,23 +61,91 @@ class ChatWindow(QtWidgets.QWidget):
     def _create_header(self, main_layout):
         header = QtWidgets.QWidget()
         header.setFixedHeight(75)
-        header.setStyleSheet("background-color: #667eea; border-bottom: 1px solid #e1e5e9;")
+        header.setStyleSheet("""
+            QWidget {
+                background-color: #667eea;
+                border-bottom: 1px solid #e1e5e9;
+            }
+        """)
         layout = QtWidgets.QHBoxLayout(header)
-        layout.setContentsMargins(20,0,20,0)
+        layout.setContentsMargins(20, 0, 20, 0)
         layout.setSpacing(15)
 
+        # Back button với styling tốt hơn
         self.btn_back = QtWidgets.QPushButton("←")
+        self.btn_back.setFixedSize(40, 40)
+        self.btn_back.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: none;
+                border-radius: 20px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.4);
+            }
+        """)
         self.btn_back.clicked.connect(self.back_clicked.emit)
 
-        friend_avatar = QtWidgets.QLabel(self.chat_data['friend_name'][0].upper())
-        friend_avatar.setFixedSize(50,50)
-        friend_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Avatar container để có thể thêm status indicator
+        avatar_container = QtWidgets.QWidget()
+        avatar_container.setFixedSize(50, 50)
+        avatar_layout = QtWidgets.QVBoxLayout(avatar_container)
+        avatar_layout.setContentsMargins(0, 0, 0, 0)
+        avatar_layout.setSpacing(0)
 
+        # Avatar với styling tốt hơn
+        friend_avatar = QtWidgets.QLabel(self.chat_data['friend_name'][0].upper())
+        friend_avatar.setFixedSize(50, 50)
+        friend_avatar.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        friend_avatar.setStyleSheet("""
+            QLabel {
+                background-color: rgba(255, 255, 255, 0.3);
+                color: white;
+                border-radius: 25px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+        """)
+
+        # Status indicator (online/offline)
+        self.status_indicator = QtWidgets.QLabel()
+        self.status_indicator.setFixedSize(12, 12)
+        self.status_indicator.setStyleSheet("""
+            QLabel {
+                background-color: #4CAF50;
+                border-radius: 6px;
+                border: 2px solid #667eea;
+            }
+        """)
+
+        # Position status indicator
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.addStretch()
+        status_layout.addWidget(self.status_indicator)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+
+        avatar_layout.addWidget(friend_avatar)
+        avatar_layout.addLayout(status_layout)
+
+        # Friend name với styling tốt hơn
         friend_name = QtWidgets.QLabel(self.chat_data['friend_name'])
-        friend_name.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
+        friend_name.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                margin-top: 5px;
+            }
+        """)
 
         layout.addWidget(self.btn_back)
-        layout.addWidget(friend_avatar)
+        layout.addWidget(avatar_container)
         layout.addWidget(friend_name)
         layout.addStretch()
         main_layout.addWidget(header)
@@ -144,8 +213,15 @@ class ChatWindow(QtWidgets.QWidget):
         main_layout.addWidget(chat_container)
 
     def _create_input_area(self, main_layout):
-        # Main input container
+        # Main input container với styling tốt hơn
         input_container = QtWidgets.QWidget()
+        input_container.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-top: 1px solid #e4e6ea;
+                padding: 0px;
+            }
+        """)
         container_layout = QtWidgets.QVBoxLayout(input_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(5)
@@ -173,33 +249,78 @@ class ChatWindow(QtWidgets.QWidget):
             print(f"[WARNING][ChatWindow] Could not import FileUploadWidget: {e}")
             self.file_upload = None
 
-        # Text input
+        # Text input với styling tốt hơn
         self.txt_message = QtWidgets.QLineEdit()
         self.txt_message.setPlaceholderText("Type a message...")
+        self.txt_message.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #e4e6ea;
+                border-radius: 20px;
+                padding: 10px 15px;
+                font-size: 14px;
+                background-color: #ffffff;
+                selection-background-color: #667eea;
+            }
+            QLineEdit:focus {
+                border-color: #667eea;
+                outline: none;
+            }
+            QLineEdit:hover {
+                border-color: #b8c6db;
+            }
+        """)
         self.txt_message.returnPressed.connect(self._on_send_clicked)
+        self.txt_message.textChanged.connect(self._on_text_changed)
 
-        # Send button
+        # Send button với styling tốt hơn
         self.btn_send = QtWidgets.QPushButton("➤")
         self.btn_send.clicked.connect(self._on_send_clicked)
-        self.btn_send.setFixedSize(40, 35)
+        self.btn_send.setFixedSize(40, 40)
         self.btn_send.setStyleSheet("""
             QPushButton {
-                background-color: #0084ff;
+                background-color: #667eea;
                 color: white;
                 border: none;
-                border-radius: 17px;
+                border-radius: 20px;
                 font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #0066cc;
+                background-color: #5a67d8;
             }
             QPushButton:pressed {
-                background-color: #004499;
+                background-color: #4c51bf;
+            }
+            QPushButton:disabled {
+                background-color: #cbd5e0;
+                color: #a0aec0;
             }
         """)
+        self.btn_send.setEnabled(False)  # Disabled by default
+
+        # Emoji button
+        self.emoji_button = QtWidgets.QPushButton("😊")
+        self.emoji_button.setFixedSize(36, 36)
+        self.emoji_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 18px;
+                font-size: 18px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+                border-radius: 18px;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+            }
+        """)
+        self.emoji_button.clicked.connect(self._show_emoji_picker)
 
         layout.addWidget(self.txt_message)
+        layout.addWidget(self.emoji_button)
         layout.addWidget(self.btn_send)
         container_layout.addWidget(input_area)
         main_layout.addWidget(input_container)
@@ -711,3 +832,64 @@ class ChatWindow(QtWidgets.QWidget):
                         widget.hide_status_indicator()
         except Exception as e:
             print(f"[ERROR][ChatWindow] Error hiding previous status: {e}")
+
+    def _show_emoji_picker(self):
+        """Hiển thị emoji picker đơn giản"""
+        self._show_simple_emoji_picker()
+
+    def _show_simple_emoji_picker(self):
+        """Emoji picker đơn giản nếu không có dialog riêng"""
+        emojis = ["😀", "😂", "😊", "😍", "🥰", "😘", "😉", "😎", "🤔", "😮", "😢", "😭",
+                 "😤", "😡", "🥺", "😴", "🤗", "🤭", "🤫", "🤥", "😈", "👻", "💀", "👽",
+                 "👍", "👎", "👌", "✌️", "🤞", "👏", "🙌", "🤝", "🙏", "💪", "🤳", "💅",
+                 "❤️", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞",
+                 "💓", "💗", "💖", "💘", "💝", "💟", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️",
+                 "🔥", "💫", "⭐", "🌟", "✨", "💥", "💢", "💦", "💨", "💬", "👁️‍🗨️", "🗨️", "🗯️", "💭"]
+
+        # Tạo menu popup với emojis
+        menu = QtWidgets.QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #ffffff;
+                border: 1px solid #e4e6ea;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 8px;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            QMenu::item:selected {
+                background-color: #f7f8fa;
+            }
+        """)
+
+        # Chia emojis thành các hàng
+        emojis_per_row = 8
+        current_row = []
+
+        for i, emoji in enumerate(emojis):
+            action = menu.addAction(emoji)
+            action.triggered.connect(lambda checked, e=emoji: self._insert_emoji(e))
+
+            current_row.append(action)
+            if (i + 1) % emojis_per_row == 0:
+                menu.addSeparator()
+                current_row = []
+
+        # Hiển thị menu tại vị trí emoji button
+        button_pos = self.emoji_button.mapToGlobal(QtCore.QPoint(0, self.emoji_button.height()))
+        menu.exec(button_pos)
+
+    def _insert_emoji(self, emoji):
+        """Chèn emoji vào input field"""
+        current_text = self.txt_message.text()
+        self.txt_message.setText(current_text + emoji)
+        self.txt_message.setFocus()
+
+    def _on_text_changed(self):
+        """Handle send button state based on text content"""
+        text = self.txt_message.text()
+        has_text = bool(text.strip())
+        self.btn_send.setEnabled(has_text)

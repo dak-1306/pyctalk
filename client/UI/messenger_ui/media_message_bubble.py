@@ -112,13 +112,14 @@ class MediaMessageBubble(QWidget):
             image_label = QLabel()
             image_label.setObjectName("imageContent")
             image_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # Load and scale image
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
-                # Scale image to fit bubble (max 300x200)
-                max_width = 300
-                max_height = 200
+                # Scale image to fit bubble (max 280x180 for better proportion)
+                max_width = 280
+                max_height = 180
                 scaled_pixmap = pixmap.scaled(
                     max_width, max_height, 
                     Qt.AspectRatioMode.KeepAspectRatio, 
@@ -126,18 +127,48 @@ class MediaMessageBubble(QWidget):
                 )
                 image_label.setPixmap(scaled_pixmap)
                 
+                # Set minimum size to prevent tiny images
+                image_label.setMinimumSize(120, 80)
+                
+                # Add subtle styling for better appearance
+                image_label.setStyleSheet("""
+                    QLabel {
+                        border-radius: 8px;
+                        background-color: transparent;
+                    }
+                """)
+                
                 # Click to view full image
                 image_label.mousePressEvent = lambda e: self.file_clicked.emit(self.file_path)
             else:
                 image_label.setText("🖼️ Image not available")
                 image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                image_label.setStyleSheet("""
+                    QLabel {
+                        color: #999;
+                        font-size: 14px;
+                        padding: 20px;
+                        background-color: rgba(248, 249, 250, 0.8);
+                        border-radius: 8px;
+                        border: 1px solid #e9ecef;
+                    }
+                """)
                 
             image_layout.addWidget(image_label)
         else:
             # Fallback if image not found
             placeholder = QLabel("🖼️ Image not found")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            placeholder.setStyleSheet("color: #666; font-style: italic;")
+            placeholder.setStyleSheet("""
+                QLabel {
+                    color: #999;
+                    font-size: 14px;
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid #e9ecef;
+                }
+            """)
             image_layout.addWidget(placeholder)
             
         layout.addWidget(image_container)
@@ -265,66 +296,79 @@ class MediaMessageBubble(QWidget):
     def _apply_styles(self):
         """Apply styles to the bubble"""
         if self.is_sent:
-            # Sent message styles (right side, blue)
+            # Sent message styles (right side, subtle background)
             self.setStyleSheet("""
                 QFrame#messageBubble {
-                    background-color: #0084ff;
+                    background-color: rgba(102, 126, 234, 0.1);
                     border-radius: 18px;
                     border-bottom-right-radius: 4px;
-                }
-                QLabel#messageText, QLabel#fileName {
-                    color: white;
-                }
-                QLabel#senderName {
-                    color: #e3f2fd;
-                    font-weight: bold;
-                }
-                QLabel#timestamp, QLabel#fileSize {
-                    color: #bbdefb;
-                }
-                QFrame#fileContainer {
-                    border-radius: 8px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                }
-                QPushButton {
-                    border: none;
-                    border-radius: 15px;
-                    color: white;
-                }
-                QPushButton:hover {
-                    background-color: rgba(255, 255, 255, 0.1);
-                }
-            """)
-        else:
-            # Received message styles (left side, gray)
-            self.setStyleSheet("""
-                QFrame#messageBubble {
-                    background-color: #f0f0f0;
-                    border-radius: 18px;
-                    border-bottom-left-radius: 4px;
+                    border: 1px solid rgba(102, 126, 234, 0.2);
                 }
                 QLabel#messageText, QLabel#fileName {
                     color: #333;
                 }
                 QLabel#senderName {
-                    color: #0084ff;
+                    color: #667eea;
                     font-weight: bold;
                 }
                 QLabel#timestamp, QLabel#fileSize {
-                    color: #666;
+                    color: #888;
                 }
                 QFrame#fileContainer {
-                    border-radius: 8px;
-                    border: 1px solid rgba(0, 0, 0, 0.1);
+                    border-radius: 12px;
+                    border: 1px solid rgba(102, 126, 234, 0.3);
+                    background-color: rgba(102, 126, 234, 0.05);
+                }
+                QLabel#imageContent {
+                    border-radius: 12px;
+                    border: 2px solid rgba(102, 126, 234, 0.2);
                 }
                 QPushButton {
-                    background-color: #0084ff;
+                    background-color: #667eea;
                     border: none;
                     border-radius: 15px;
                     color: white;
                 }
                 QPushButton:hover {
-                    background-color: #0066cc;
+                    background-color: #5a67d8;
+                }
+            """)
+        else:
+            # Received message styles (left side, light background)
+            self.setStyleSheet("""
+                QFrame#messageBubble {
+                    background-color: #f8f9fa;
+                    border-radius: 18px;
+                    border-bottom-left-radius: 4px;
+                    border: 1px solid #e9ecef;
+                }
+                QLabel#messageText, QLabel#fileName {
+                    color: #333;
+                }
+                QLabel#senderName {
+                    color: #667eea;
+                    font-weight: bold;
+                }
+                QLabel#timestamp, QLabel#fileSize {
+                    color: #888;
+                }
+                QFrame#fileContainer {
+                    border-radius: 12px;
+                    border: 1px solid #dee2e6;
+                    background-color: #ffffff;
+                }
+                QLabel#imageContent {
+                    border-radius: 12px;
+                    border: 2px solid #e9ecef;
+                }
+                QPushButton {
+                    background-color: #667eea;
+                    border: none;
+                    border-radius: 15px;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background-color: #5a67d8;
                 }
             """)
             

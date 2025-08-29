@@ -103,7 +103,7 @@ class Ui_MainWindow(QtCore.QObject):
         self.tabWidget = self.sidebar.tabWidget
         self.groups_list = self.sidebar.groups_list
         # self.btnGroupChat đã bị loại bỏ
-        self.btnSettings = self.sidebar.btnSettings
+        # self.btnSettings removed - now using compact menu
         self.outer_layout.addWidget(self.sidebar)
 
     def _clean_invalid_widgets(self):
@@ -130,128 +130,103 @@ class Ui_MainWindow(QtCore.QObject):
         """Open 1-1 chat window when a friend is selected"""
         from client.Chat1_1.chat_window_widget import ChatWindow
         from client.Chat1_1.chat1v1_client import Chat1v1Client
-        
+
         print(f"[DEBUG][MainWindow] _open_chat_window_1v1 called with chat_data={chat_data}")
-        print(f"[DEBUG][MainWindow] self.user_id={self.user_id}")
-        
-        # Clean invalid widgets from cache first
-        self._clean_invalid_widgets()
-        
-        # Ensure current_user_id is set
-        chat_data['current_user_id'] = chat_data.get('current_user_id', self.user_id)
+
+        # Prevent multiple rapid clicks by checking if we're already opening a chat
+        if hasattr(self, '_opening_chat') and self._opening_chat:
+            print("[DEBUG][MainWindow] Already opening a chat window, ignoring duplicate request")
+            return
+
+        self._opening_chat = True
+
         try:
-            chat_data['current_user_id'] = int(chat_data['current_user_id'])
-        except Exception:
-            pass
-            
-        friend_id = chat_data.get('friend_id', 1)
-        
-        print(f"[DEBUG][MainWindow] After processing: current_user_id={chat_data['current_user_id']}, friend_id={friend_id}")
-        
-        # Ẩn card_container nếu đang hiển thị
-        try:
+            friend_id = chat_data.get('friend_id', 1)
+            current_user_id = chat_data.get('current_user_id', self.user_id)
+
+            print(f"[DEBUG][MainWindow] Opening chat for friend_id={friend_id}, current_user_id={current_user_id}")
+
+            # If we're already chatting with this friend, just bring the window to front
+            if self.current_chat_friend_id == friend_id and friend_id in self.chat_windows_cache:
+                try:
+                    chat_window, _ = self.chat_windows_cache[friend_id]
+                    chat_window.show()
+                    chat_window.raise_()
+                    chat_window.activateWindow()
+                    print(f"[DEBUG][MainWindow] Brought existing chat window to front for friend_id={friend_id}")
+                    return
+                except Exception as e:
+                    print(f"[DEBUG][MainWindow] Error bringing window to front: {e}")
+                    # Remove invalid window from cache
+                    if friend_id in self.chat_windows_cache:
+                        del self.chat_windows_cache[friend_id]
+
+            # Hide main card if visible
             if hasattr(self, 'card_container') and self.card_container and self.card_container.isVisible():
                 self.card_container.hide()
-        except RuntimeError:
-            # Widget đã bị xóa, bỏ qua
-            print("[DEBUG][MainWindow] card_container đã bị xóa, bỏ qua")
-            self.card_container = None
 
-        # Ẩn và remove tất cả widgets cũ trong main_layout (trừ topbar) để tránh đè lên nhau
-        widgets_to_remove = []
-        for i in range(self.main_layout.count()):
-            widget = self.main_layout.itemAt(i).widget()
-            # Giữ lại topbar, remove các widget khác
-            if widget and getattr(widget, 'objectName', lambda: None)() != "topbar":
-                widgets_to_remove.append(widget)
-        for widget in widgets_to_remove:
-            self.main_layout.removeWidget(widget)
-            widget.hide()
-            # Đặt parent về None để widget không bị tự động xóa
-            widget.setParent(None)
-        
-        # Ẩn chat window hiện tại (nếu có)
-        if self.current_chat_friend_id and self.current_chat_friend_id in self.chat_windows_cache:
-            try:
-                current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
-                # Kiểm tra xem widget có còn tồn tại không bằng cách test một method
-                current_chat_window.isVisible()  # This will raise RuntimeError if deleted
-                current_chat_window.hide()
-                print(f"[DEBUG][MainWindow] Hidden current chat window for friend_id={self.current_chat_friend_id}")
-            except RuntimeError as e:
-                print(f"[DEBUG][MainWindow] Chat window already deleted: {e}")
-                # Widget đã bị xóa, xóa khỏi cache
-                del self.chat_windows_cache[self.current_chat_friend_id]
-                print(f"[DEBUG][MainWindow] Removed invalid chat window from cache for friend_id={self.current_chat_friend_id}")
-            except Exception as e:
-                print(f"[ERROR][MainWindow] Unexpected error with chat window: {e}")
-                del self.chat_windows_cache[self.current_chat_friend_id]
-        
-        # Kiểm tra cache, nếu đã có thì dùng lại (nhưng tạo connection mới)
-        if friend_id in self.chat_windows_cache:
-            try:
-                chat_window, api_client = self.chat_windows_cache[friend_id]
-                # Test widget validity
-                chat_window.isVisible()  # This will raise RuntimeError if deleted
-                
-                # Tạo new API client để tránh connection conflict
-                from client.Chat1_1.chat1v1_api_client import Chat1v1APIClient
-                new_api_client = Chat1v1APIClient(self.client)
-                
-                # Tạo new logic instance để avoid conflicts
-                from client.Chat1_1.chat1v1_logic import Chat1v1Logic
-                current_user_id = chat_data.get('current_user_id', self.user_id)
-                new_logic = Chat1v1Logic(chat_window, new_api_client, current_user_id, friend_id)
-                chat_window.logic = new_logic
-                
-                # Update cache với new instances
-                self.chat_windows_cache[friend_id] = (chat_window, new_api_client)
-                
-                print(f"[DEBUG][MainWindow] Reusing cached chat window for friend_id={friend_id} with new connections")
-                chat_window.setParent(self.centralwidget)
-                self.main_layout.addWidget(chat_window)
-                chat_window.show()
-                
-                # Load message history for reused window
-                asyncio.create_task(new_logic.load_message_history())
-                
-                print(f"[DEBUG][MainWindow] Reused cached chat window for friend_id={friend_id}")
-                return  # Successfully reused cached window
-            except RuntimeError as e:
-                print(f"[ERROR][MainWindow] Cached chat window invalid: {e}")
-                # Xóa khỏi cache và tạo mới
-                if friend_id in self.chat_windows_cache:
-                    del self.chat_windows_cache[friend_id]
-                # Create new window by falling through to else block
-        
-        # Tạo mới chat window nếu không có trong cache hoặc cache invalid
-        if friend_id not in self.chat_windows_cache:
-            # Tạo mới chat window và cache lại
-            chat_window = ChatWindow(chat_data, pyctalk_client=self.client)
-            # Debug: Check values before creating Chat1v1Client
-            print(f"[DEBUG][MainWindow] Creating Chat1v1Client with:")
-            print(f"  chat_data={chat_data}")
-            print(f"  current_user_id={chat_data.get('current_user_id')}")
-            print(f"  friend_id={friend_id}")
-            
-            # Khởi tạo api_client và logic, gán logic cho chat_window
+            # Hide current chat window if different friend
+            if (self.current_chat_friend_id and
+                self.current_chat_friend_id != friend_id and
+                self.current_chat_friend_id in self.chat_windows_cache):
+                try:
+                    current_chat_window, _ = self.chat_windows_cache[self.current_chat_friend_id]
+                    current_chat_window.hide()
+                    print(f"[DEBUG][MainWindow] Hidden previous chat window for friend_id={self.current_chat_friend_id}")
+                except Exception as e:
+                    print(f"[DEBUG][MainWindow] Error hiding previous chat window: {e}")
+
+            # Clear main layout (except topbar)
+            self._clear_main_layout()
+
+            # Create new chat window
+            chat_data_copy = chat_data.copy()
+            chat_data_copy['current_user_id'] = current_user_id
+
+            print(f"[DEBUG][MainWindow] Creating new chat window for friend_id={friend_id}")
+
+            chat_window = ChatWindow(chat_data_copy, pyctalk_client=self.client)
+
+            # Create API client
             api_client = Chat1v1Client(
                 chat_window,
                 pyctalk_client=self.client,
-                current_user_id=chat_data['current_user_id'],
+                current_user_id=current_user_id,
                 friend_id=friend_id
             )
-            # Sử dụng logic đã được tạo trong Chat1v1Client
+
+            # Assign logic
             chat_window.logic = api_client.logic
-            
-            # Cache lại để dùng lại sau
+
+            # Cache the window
             self.chat_windows_cache[friend_id] = (chat_window, api_client)
-            
+
+            # Add to layout and show
             self.main_layout.addWidget(chat_window)
             chat_window.show()
-            
-        self.current_chat_friend_id = friend_id
-        print(f"[DEBUG][MainWindow] Successfully opened chat window for friend_id={friend_id}")
+
+            # Update current chat friend
+            self.current_chat_friend_id = friend_id
+
+            print(f"[DEBUG][MainWindow] Successfully opened chat window for friend_id={friend_id}")
+
+        finally:
+            self._opening_chat = False
+
+    def _clear_main_layout(self):
+        """Clear all widgets from main layout except topbar"""
+        widgets_to_remove = []
+        for i in range(self.main_layout.count()):
+            item = self.main_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if getattr(widget, 'objectName', lambda: None)() != "topbar":
+                    widgets_to_remove.append(widget)
+
+        for widget in widgets_to_remove:
+            self.main_layout.removeWidget(widget)
+            widget.hide()
+            widget.setParent(None)
 
     def _handle_chat_friend_from_sidebar(self, friend_data):
         """Handle chat request from sidebar friends management"""
@@ -306,7 +281,7 @@ class Ui_MainWindow(QtCore.QObject):
     def _setup_topbar(self):
         """Setup topbar widget"""
         self.topbar = TopBarWidget(self.username)
-        self.status_indicator = self.topbar.status_indicator
+        # self.status_indicator = self.topbar.status_indicator  # DISABLED - status_indicator removed for cleaner UI
         self.btnThemeToggle = self.topbar.btnThemeToggle
         self.btnLogout = self.topbar.btnLogout
         self.avatar_label = self.topbar.avatar_label
@@ -385,84 +360,23 @@ class Ui_MainWindow(QtCore.QObject):
         layout.addWidget(self.status_message)
     
     def _setup_quick_actions(self, layout):
-        """Setup quick action buttons"""
-        actions_layout = QtWidgets.QHBoxLayout()
-        actions_layout.setSpacing(16)
-        
-        # Quick chat button
-        quick_chat_btn = QtWidgets.QPushButton("💬 Chat nhanh")
-        quick_chat_btn.setMinimumHeight(45)
-        actions_layout.addWidget(quick_chat_btn)
-        
-        # Find friends button  
-        find_friends_btn = QtWidgets.QPushButton("👥 Tìm bạn bè")
-        find_friends_btn.setMinimumHeight(45)
-        actions_layout.addWidget(find_friends_btn)
-        
-        layout.addLayout(actions_layout)
+        """Setup quick action buttons - DISABLED for cleaner UI"""
+        pass  # Quick action buttons disabled to reduce clutter
     
     def _setup_status_bar(self, MainWindow):
-        """Setup status bar with connection info"""
-        self.status_bar = MainWindow.statusBar()
-        
-        # Connection status
-        self.status_connection = QtWidgets.QLabel("Đã sẵn sàng")
-        self.status_bar.addWidget(self.status_connection)
-        
-        # User count (if available)
-        self.status_users = QtWidgets.QLabel("0 người dùng trực tuyến")
-        self.status_bar.addPermanentWidget(self.status_users)
-        
-        # Version info
-        version_label = QtWidgets.QLabel("v2.0")
-        self.status_bar.addPermanentWidget(version_label)
+        """Setup status bar with connection info - DISABLED for cleaner UI"""
+        pass  # Status bar disabled to reduce clutter
     
     def _setup_menu_bar(self, MainWindow):
-        """Setup application menu bar"""
-        menubar = MainWindow.menuBar()
-        
-        # File menu
-        file_menu = menubar.addMenu('&Tệp')
-        
-        # Settings action
-        settings_action = QAction('⚙️ &Cài đặt', MainWindow)
-        settings_action.setShortcut('Ctrl+,')
-        settings_action.triggered.connect(self.show_settings)
-        file_menu.addAction(settings_action)
-        
-        file_menu.addSeparator()
-        
-        # Exit action
-        exit_action = QAction('🚪 &Thoát', MainWindow)
-        exit_action.setShortcut('Ctrl+Q')
-        exit_action.triggered.connect(MainWindow.close)
-        file_menu.addAction(exit_action)
-        
-        # View menu
-        view_menu = menubar.addMenu('&Hiển thị')
-        
-        # Theme actions
-        light_theme_action = QAction('☀️ Giao diện sáng', MainWindow)
-        light_theme_action.triggered.connect(lambda: self.change_theme('light'))
-        view_menu.addAction(light_theme_action)
-        
-        dark_theme_action = QAction('🌙 Giao diện tối', MainWindow)
-        dark_theme_action.triggered.connect(lambda: self.change_theme('dark'))
-        view_menu.addAction(dark_theme_action)
-        
-        # Help menu
-        help_menu = menubar.addMenu('&Trợ giúp')
-        
-        about_action = QAction('ℹ️ &Giới thiệu', MainWindow)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
+        """Setup application menu bar - DISABLED for cleaner UI"""
+        pass  # Menu bar disabled to reduce clutter
     
     def _connect_signals(self):
         """Connect all signals and slots"""
         # Button clicks
         self.btnLogout.clicked.connect(self.on_logout_clicked)
     # self.btnGroupChat đã bị loại bỏ
-        self.btnSettings.clicked.connect(self.show_settings)
+        # self.btnSettings removed - now using compact menu
         self.btnThemeToggle.clicked.connect(self.toggle_theme)
         
         # Avatar click to open profile
@@ -870,8 +784,8 @@ class Ui_MainWindow(QtCore.QObject):
     def _update_connection_status(self, is_connected: bool):
         """Update UI based on connection status"""
         self.is_connected = is_connected
-        self.status_indicator.setText("🟢 Đã kết nối" if is_connected else "🔴 Mất kết nối")
-        self.status_connection.setText("Kết nối ổn định" if is_connected else "Đang kết nối lại...")
+        # self.status_indicator.setText("🟢 Đã kết nối" if is_connected else "🔴 Mất kết nối")  # DISABLED - status_indicator removed for cleaner UI
+        # self.status_connection.setText("Kết nối ổn định" if is_connected else "Đang kết nối lại...")  # DISABLED - status_connection removed for cleaner UI
     # self.btnGroupChat đã bị loại bỏ
         # Chỉ cập nhật status_message nếu nó còn tồn tại và chưa bị xóa
         if hasattr(self, "status_message") and self.status_message is not None:
@@ -983,7 +897,6 @@ class Ui_MainWindow(QtCore.QObject):
         button_layout.addWidget(ok_button)
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
-        
         dialog.exec()
     
     def show_about(self):

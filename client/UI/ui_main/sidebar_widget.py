@@ -4,7 +4,15 @@ class SidebarWidget(QtWidgets.QFrame):
     def __init__(self, has_friends_ui, client, user_id, username, parent=None):
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setFixedWidth(280)
+        self.setFixedWidth(320)  # Tăng width để 2 tabs hiển thị vừa vặn
+        self.setStyleSheet("""
+            SidebarWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8fafc,
+                    stop:1 #e2e8f0);
+                border-right: 1px solid rgba(0, 0, 0, 0.08);
+            }
+        """)
         self.client = client
         self.user_id = user_id
         self.username = username
@@ -16,9 +24,90 @@ class SidebarWidget(QtWidgets.QFrame):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
+        # Compact menu bar
+        self._setup_compact_menu(sidebar_layout)
+
+        # Add some spacing and visual separation
+        separator = QtWidgets.QFrame()
+        separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        separator.setStyleSheet("""
+            QFrame {
+                color: rgba(0, 0, 0, 0.1);
+                margin: 0px 8px;
+            }
+        """)
+        sidebar_layout.addWidget(separator)
+
         # Tab widget
         self.tabWidget = QtWidgets.QTabWidget()
         self.tabWidget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
+
+        # Disable scroll buttons and elide mode for clean display
+        self.tabWidget.setUsesScrollButtons(False)
+        self.tabWidget.tabBar().setElideMode(QtCore.Qt.TextElideMode.ElideNone)
+        self.tabWidget.tabBar().setExpanding(True)  # Make tabs expand to fill available space
+
+        # Custom styling for tabs
+        self.tabWidget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: transparent;
+                border-radius: 0px;
+            }
+            QTabBar::tab {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.95),
+                    stop:1 rgba(248, 250, 252, 0.95));
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-bottom: none;
+                border-radius: 8px 8px 0 0;
+                padding: 10px 6px;
+                margin: 0px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #6b7280;
+                min-width: 80px;
+                max-width: 100px;
+                flex: 1;
+                transition: all 0.3s ease;
+                text-align: center;
+            }
+            QTabBar::tab:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(99, 102, 241, 0.12),
+                    stop:1 rgba(79, 70, 229, 0.08));
+                color: #6366f1;
+                border-color: rgba(99, 102, 241, 0.4);
+                transform: translateY(-1px);
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffffff,
+                    stop:1 #f8fafc);
+                color: #6366f1;
+                border-color: rgba(99, 102, 241, 0.6);
+                border-bottom: 3px solid #6366f1;
+                font-weight: 700;
+            }
+            QTabBar::tab:first {
+                margin-left: 0px;
+                border-top-left-radius: 12px;
+            }
+            QTabBar::tab:last {
+                margin-right: 0px;
+                border-top-right-radius: 12px;
+            }
+            /* Hide scroll buttons */
+            QTabBar::scroller {
+                width: 0px;
+            }
+            QTabBar QToolButton {
+                display: none;
+            }
+        """)
+
+        self.tabWidget.currentChanged.connect(self._on_tab_changed)
 
         # Friends tab
         if self.has_friends_ui:
@@ -30,8 +119,131 @@ class SidebarWidget(QtWidgets.QFrame):
         self._setup_groups_tab()
         sidebar_layout.addWidget(self.tabWidget)
 
-        # Action buttons
-        self._setup_sidebar_actions(sidebar_layout)
+        # Remove the old action buttons section
+        # self._setup_sidebar_actions(sidebar_layout)
+
+    def _setup_compact_menu(self, layout):
+        """Setup compact menu bar that changes based on selected tab"""
+        # Menu container
+        self.menu_container = QtWidgets.QFrame()
+        self.menu_container.setFixedHeight(45)
+        self.menu_container.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.95),
+                    stop:1 rgba(248, 250, 252, 0.95));
+                border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 0px;
+            }
+        """)
+
+        self.menu_layout = QtWidgets.QHBoxLayout(self.menu_container)
+        self.menu_layout.setContentsMargins(8, 4, 8, 4)
+        self.menu_layout.setSpacing(4)
+
+        # Initially show friends menu
+        self._update_menu_for_tab(0)
+
+        layout.addWidget(self.menu_container)
+
+    def _on_tab_changed(self, index):
+        """Handle tab change to update menu"""
+        self._update_menu_for_tab(index)
+
+    def _update_menu_for_tab(self, tab_index):
+        """Update menu based on selected tab"""
+        # Clear current menu
+        while self.menu_layout.count():
+            child = self.menu_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Add stretch at the beginning
+        self.menu_layout.addStretch()
+
+        if tab_index == 0:  # Friends tab
+            self._create_friends_menu()
+        else:  # Groups tab
+            self._create_groups_menu()
+
+        # Add stretch at the end
+        self.menu_layout.addStretch()
+
+    def _create_friends_menu(self):
+        """Create compact friends menu"""
+        # Add Friend button
+        add_btn = self._create_compact_button("👥", "Thêm bạn", self._show_add_friend_dialog)
+        self.menu_layout.addWidget(add_btn)
+
+        # Friend Requests button
+        requests_btn = self._create_compact_button("📨", "Lời mời", self._show_friend_requests)
+        self.menu_layout.addWidget(requests_btn)
+
+        # Sent Requests button
+        sent_btn = self._create_compact_button("📤", "Đã gửi", self._show_sent_requests)
+        self.menu_layout.addWidget(sent_btn)
+
+        # Manage Friends button
+        manage_btn = self._create_compact_button("⚙️", "Quản lý", self._show_friends_management)
+        self.menu_layout.addWidget(manage_btn)
+
+        # Settings button (always visible)
+        settings_btn = self._create_compact_button("🔧", "Cài đặt", self._show_settings)
+        self.menu_layout.addWidget(settings_btn)
+
+    def _create_groups_menu(self):
+        """Create compact groups menu"""
+        # Create Group button
+        create_btn = self._create_compact_button("➕", "Tạo nhóm", self._show_create_group_window)
+        self.menu_layout.addWidget(create_btn)
+
+        # Join Group button
+        join_btn = self._create_compact_button("🔗", "Tham gia", self._show_join_group_window)
+        self.menu_layout.addWidget(join_btn)
+
+        # Settings button (always visible)
+        settings_btn = self._create_compact_button("🔧", "Cài đặt", self._show_settings)
+        self.menu_layout.addWidget(settings_btn)
+
+    def _create_compact_button(self, icon, tooltip, callback):
+        """Create a compact icon button with hover effects"""
+        btn = QtWidgets.QPushButton(icon)
+        btn.setFixedSize(32, 32)
+        btn.setToolTip(tooltip)
+        btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 6px;
+                font-size: 18px;
+                padding: 4px;
+                margin: 2px;
+                color: #6b7280;
+                transition: all 0.2s ease;
+            }
+            QPushButton:hover {
+                background-color: rgba(99, 102, 241, 0.15);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                color: #6366f1;
+                transform: scale(1.05);
+            }
+            QPushButton:pressed {
+                background-color: rgba(99, 102, 241, 0.25);
+                border: 1px solid rgba(99, 102, 241, 0.5);
+                color: #4f46e5;
+                transform: scale(0.95);
+            }
+            QPushButton:disabled {
+                color: #d1d5db;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+
+        btn.clicked.connect(callback)
+        return btn
 
     def _setup_friends_tab(self):
         try:
@@ -44,7 +256,7 @@ class SidebarWidget(QtWidgets.QFrame):
             f_lay = QtWidgets.QVBoxLayout(friends_tab)
             f_lay.setContentsMargins(0, 0, 0, 0)
             f_lay.addWidget(self.friends_widget)
-            self.tabWidget.addTab(friends_tab, "👥 Bạn bè")
+            self.tabWidget.addTab(friends_tab, "�‍👨‍👦‍👦 Bạn bè")
         except Exception as e:
             print(f"[ERROR][SidebarWidget] Lỗi khi import/khởi tạo FriendListWindow: {e}")
             self._setup_fallback_friends_tab()
@@ -58,7 +270,7 @@ class SidebarWidget(QtWidgets.QFrame):
         friends_list = QtWidgets.QListWidget()
         friends_list.addItem("Không có dữ liệu bạn bè hoặc không kết nối được database.")
         layout.addWidget(friends_list)
-        self.tabWidget.addTab(friends_tab, "👥 Bạn bè")
+        self.tabWidget.addTab(friends_tab, "�‍👨‍👦‍👦 Bạn bè")
 
     def _setup_groups_tab(self):
         groups_tab = QtWidgets.QWidget()
@@ -72,65 +284,39 @@ class SidebarWidget(QtWidgets.QFrame):
         # Đảm bảo tương thích với code cũ
         self.groups_list = self.groups_widget
 
-        # Action buttons trong tab nhóm
-        group_actions = QtWidgets.QHBoxLayout()
-        self.create_group_btn = QtWidgets.QPushButton("+ Tạo nhóm")
-        self.join_group_btn = QtWidgets.QPushButton("🔗 Tham gia")
-        
-        # Connect create group button
-        self.create_group_btn.clicked.connect(self._show_create_group_window)
-        
-        group_actions.addWidget(self.create_group_btn)
-        group_actions.addWidget(self.join_group_btn)
-        layout.addLayout(group_actions)
+        self.tabWidget.addTab(groups_tab, "�‍👩‍👧‍👦 Nhóm")
 
-        self.tabWidget.addTab(groups_tab, "👥 Nhóm")
+    def _create_modern_button(self, text, icon_name, callback):
+        """Create a modern styled button"""
+        btn = QtWidgets.QPushButton(text)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
+                font-weight: 500;
+                color: #374151;
+                text-align: left;
+                margin: 1px 0px;
+            }
+            QPushButton:hover {
+                background-color: #f3f4f6;
+                border-color: rgba(99, 102, 241, 0.3);
+                color: #6366f1;
+            }
+            QPushButton:pressed {
+                background-color: #e5e7eb;
+            }
+        """)
+        btn.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        btn.clicked.connect(callback)
 
-    def _setup_sidebar_actions(self, layout):
-        actions_frame = QtWidgets.QFrame()
-        actions_layout = QtWidgets.QVBoxLayout(actions_frame)
+        # Store button reference for later access
+        setattr(self, f"btn{icon_name}", btn)
 
-        separator = QtWidgets.QFrame()
-        separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        actions_layout.addWidget(separator)
-
-        # Nút kết bạn mới
-        self.btnAddFriend = QtWidgets.QPushButton("➕ Kết bạn")
-        self.btnAddFriend.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnAddFriend)
-
-        # Nút xem lời mời kết bạn
-        self.btnFriendRequests = QtWidgets.QPushButton("📩 Lời mời kết bạn")
-        self.btnFriendRequests.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnFriendRequests)
-
-        # Nút xem lời mời đã gửi
-        self.btnSentRequests = QtWidgets.QPushButton("📤 Lời mời đã gửi")
-        self.btnSentRequests.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnSentRequests)
-
-        # Nút quản lý bạn bè
-        self.btnManageFriends = QtWidgets.QPushButton("👥 Quản lý bạn bè")
-        self.btnManageFriends.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnManageFriends)
-
-        # Tích hợp logic gửi kết bạn
-        self.btnAddFriend.clicked.connect(self._show_add_friend_dialog)
-        
-        # Tích hợp logic xem lời mời kết bạn
-        self.btnFriendRequests.clicked.connect(self._show_friend_requests)
-        
-        # Tích hợp logic xem lời mời đã gửi
-        self.btnSentRequests.clicked.connect(self._show_sent_requests)
-        
-        # Tích hợp logic quản lý bạn bè
-        self.btnManageFriends.clicked.connect(self._show_friends_management)
-
-        self.btnSettings = QtWidgets.QPushButton("⚙️ Cài đặt")
-        self.btnSettings.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-        actions_layout.addWidget(self.btnSettings)
-
-        layout.addWidget(actions_frame)
+        return btn
 
     def _show_add_friend_dialog(self):
         from Add_friend.friend import FriendClient
@@ -221,3 +407,104 @@ class SidebarWidget(QtWidgets.QFrame):
             self.groups_widget.refresh_groups()
         elif hasattr(self, 'groups_widget') and hasattr(self.groups_widget, '_load_groups'):
             asyncio.create_task(self.groups_widget._load_groups())
+
+    def _show_join_group_window(self):
+        """Hiển thị cửa sổ tham gia nhóm"""
+        # Create a simple join group dialog since join_group_window doesn't exist
+        group_id, ok = QtWidgets.QInputDialog.getText(
+            self, "🔗 Tham gia nhóm", "Nhập ID nhóm muốn tham gia:"
+        )
+        if not ok or not group_id:
+            return
+            
+        # TODO: Implement actual join group functionality
+        QtWidgets.QMessageBox.information(
+            self, "Thông báo", f"Chức năng tham gia nhóm với ID '{group_id}' sẽ được phát triển sau!"
+        )
+        
+    def _on_group_joined(self, group_data):
+        """Handle when user joins a group"""
+        print(f"[DEBUG] User joined group: {group_data}")
+        
+        # Refresh groups list
+        if hasattr(self, 'groups_widget') and hasattr(self.groups_widget, 'refresh_groups'):
+            self.groups_widget.refresh_groups()
+        elif hasattr(self, 'groups_widget') and hasattr(self.groups_widget, '_load_groups'):
+            asyncio.create_task(self.groups_widget._load_groups())
+            
+    def _show_settings(self):
+        """Show settings dialog"""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("⚙️ Cài đặt")
+        dialog.setModal(True)
+        dialog.resize(450, 350)
+        
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Theme selection
+        theme_group = QtWidgets.QGroupBox("🎨 Giao diện")
+        theme_layout = QtWidgets.QVBoxLayout(theme_group)
+        
+        light_radio = QtWidgets.QRadioButton("☀️ Giao diện sáng")
+        dark_radio = QtWidgets.QRadioButton("🌙 Giao diện tối")
+        
+        # Get current theme from parent window
+        parent_window = self.parent()
+        while parent_window and not hasattr(parent_window, 'current_theme'):
+            parent_window = parent_window.parent()
+            
+        if parent_window and hasattr(parent_window, 'current_theme'):
+            if parent_window.current_theme == "light":
+                light_radio.setChecked(True)
+            else:
+                dark_radio.setChecked(True)
+        
+        theme_layout.addWidget(light_radio)
+        theme_layout.addWidget(dark_radio)
+        layout.addWidget(theme_group)
+        
+        # Notifications
+        notif_group = QtWidgets.QGroupBox("🔔 Thông báo")
+        notif_layout = QtWidgets.QVBoxLayout(notif_group)
+        
+        show_notifs = QtWidgets.QCheckBox("Hiển thị thông báo hệ thống")
+        sound_notifs = QtWidgets.QCheckBox("Âm thanh thông báo")
+        
+        # Get settings from parent window
+        if parent_window and hasattr(parent_window, 'settings'):
+            show_notifs.setChecked(parent_window.settings.get("show_notifications", True))
+            sound_notifs.setChecked(parent_window.settings.get("sound_notifications", True))
+        
+        notif_layout.addWidget(show_notifs)
+        notif_layout.addWidget(sound_notifs)
+        layout.addWidget(notif_group)
+        
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        
+        ok_button = QtWidgets.QPushButton("✅ OK")
+        cancel_button = QtWidgets.QPushButton("❌ Hủy")
+        
+        def save_settings():
+            # Save theme
+            theme = "light" if light_radio.isChecked() else "dark"
+            if parent_window and hasattr(parent_window, 'change_theme'):
+                parent_window.change_theme(theme)
+            
+            # Save notification settings
+            if parent_window and hasattr(parent_window, 'settings'):
+                parent_window.settings.set("show_notifications", show_notifs.isChecked())
+                parent_window.settings.set("sound_notifications", sound_notifs.isChecked())
+            
+            dialog.accept()
+        
+        ok_button.clicked.connect(save_settings)
+        cancel_button.clicked.connect(dialog.reject)
+        
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
