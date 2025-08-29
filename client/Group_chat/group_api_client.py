@@ -51,6 +51,30 @@ class GroupAPIClient:
     async def get_friends(self, user_id: str):
         return await self._send("get_friends", {"user_id": user_id})
 
+    # === Group Management Methods ===
+    async def leave_group(self, group_id: str, user_id: str):
+        """Rời khỏi nhóm"""
+        return await self._send("leave_group", {
+            "group_id": group_id,
+            "user_id": user_id
+        })
+
+    async def transfer_leadership(self, group_id: str, current_admin_id: str, new_admin_id: str):
+        """Chuyển quyền trưởng nhóm"""
+        return await self._send("transfer_leadership", {
+            "group_id": group_id,
+            "current_admin_id": current_admin_id,
+            "new_admin_id": new_admin_id
+        })
+
+    async def remove_member(self, group_id: str, admin_id: str, member_id: str):
+        """Admin kick thành viên khỏi nhóm"""
+        return await self._send("remove_member", {
+            "group_id": group_id,
+            "admin_id": admin_id,
+            "member_id": member_id
+        })
+
     async def _send(self, action: str, data: dict):
         """Helper async để gửi request"""
         try:

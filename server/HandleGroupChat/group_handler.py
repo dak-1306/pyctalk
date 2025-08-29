@@ -19,9 +19,9 @@ class GroupHandler:
             result = await db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
             group_id = result["group_id"]
 
-            # Thêm người tạo vào nhóm
+            # Thêm người tạo vào nhóm với role admin
             await db.execute(
-                "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
+                "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'admin')",
                 (group_id, created_by)
             )
 
@@ -68,8 +68,9 @@ class GroupHandler:
             result = await db.fetch_one("SELECT LAST_INSERT_ID() as group_id")
             group_id = result["group_id"]
 
+            # Set creator làm admin ngay từ đầu
             await db.execute(
-                "INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)",
+                "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'admin')",
                 (group_id, created_by)
             )
             return {"status": "ok", "message": f"Tạo nhóm '{group_name}' thành công", "group_id": group_id}
@@ -281,4 +282,162 @@ class GroupHandler:
             
         except Exception as e:
             print(f"❌ Lỗi add_user_to_group: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def leave_group(self, group_id: int, user_id: int) -> dict:
+        """Rời khỏi nhóm - kiểm tra quyền admin"""
+        try:
+            # Kiểm tra user có trong nhóm không
+            member_info = await db.fetch_one(
+                "SELECT role FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, user_id)
+            )
+            
+            if not member_info:
+                return {"status": "error", "message": "Bạn không phải thành viên của nhóm này"}
+            
+            # Nếu là admin, kiểm tra có admin khác không
+            if member_info["role"] == "admin":
+                other_admins = await db.fetch_all(
+                    "SELECT user_id FROM group_members WHERE group_id = %s AND role = 'admin' AND user_id != %s",
+                    (group_id, user_id)
+                )
+                
+                if not other_admins:
+                    # Không có admin khác, cần chuyển quyền trước
+                    return {
+                        "status": "error", 
+                        "message": "Bạn là admin duy nhất. Vui lòng chuyển quyền trưởng nhóm cho ai đó trước khi rời nhóm",
+                        "require_transfer": True
+                    }
+            
+            # Xóa khỏi nhóm
+            await db.execute(
+                "DELETE FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, user_id)
+            )
+            
+            # Kiểm tra nếu nhóm không còn thành viên nào thì xóa nhóm
+            remaining_members = await db.fetch_all(
+                "SELECT user_id FROM group_members WHERE group_id = %s",
+                (group_id,)
+            )
+            
+            if not remaining_members:
+                # Xóa nhóm nếu không còn ai
+                await db.execute("DELETE FROM group_chat WHERE group_id = %s", (group_id,))
+                return {"status": "ok", "message": "Đã rời nhóm. Nhóm đã bị giải tán do không còn thành viên"}
+            
+            return {"status": "ok", "message": "Đã rời khỏi nhóm thành công"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi leave_group: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def transfer_admin(self, group_id: int, current_admin_id: int, new_admin_id: int) -> dict:
+        """Chuyển quyền trưởng nhóm"""
+        try:
+            # Kiểm tra current_admin có phải admin không
+            current_admin = await db.fetch_one(
+                "SELECT role FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, current_admin_id)
+            )
+            
+            if not current_admin or current_admin["role"] != "admin":
+                return {"status": "error", "message": "Bạn không có quyền chuyển quyền trưởng nhóm"}
+            
+            # Kiểm tra new_admin có trong nhóm không
+            new_admin = await db.fetch_one(
+                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, new_admin_id)
+            )
+            
+            if not new_admin:
+                return {"status": "error", "message": "Người được chọn không phải thành viên của nhóm"}
+            
+            # Chuyển new_admin thành admin
+            await db.execute(
+                "UPDATE group_members SET role = 'admin' WHERE group_id = %s AND user_id = %s",
+                (group_id, new_admin_id)
+            )
+            
+            # Chuyển current_admin thành member (nếu muốn)
+            await db.execute(
+                "UPDATE group_members SET role = 'member' WHERE group_id = %s AND user_id = %s",
+                (group_id, current_admin_id)
+            )
+            
+            return {"status": "ok", "message": "Đã chuyển quyền trưởng nhóm thành công"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi transfer_admin: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def get_group_members_with_roles(self, group_id: int) -> dict:
+        """Lấy danh sách thành viên kèm role"""
+        try:
+            members = await db.fetch_all("""
+                SELECT gm.user_id, u.username, gm.role, gm.joined_at
+                FROM group_members gm
+                JOIN users u ON gm.user_id = u.id
+                WHERE gm.group_id = %s
+                ORDER BY gm.role DESC, gm.joined_at ASC
+            """, (group_id,))
+            
+            return {
+                "status": "ok",
+                "members": [
+                    {
+                        "user_id": member["user_id"],
+                        "username": member["username"], 
+                        "role": member["role"],
+                        "joined_at": member["joined_at"].strftime('%Y-%m-%d %H:%M:%S') if member["joined_at"] else None
+                    }
+                    for member in members
+                ]
+            }
+            
+        except Exception as e:
+            print(f"❌ Lỗi get_group_members_with_roles: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def transfer_leadership(self, group_id: int, current_admin_id: int, new_admin_id: int) -> dict:
+        """Chuyển quyền trưởng nhóm (alias cho transfer_admin)"""
+        return await self.transfer_admin(group_id, current_admin_id, new_admin_id)
+
+    async def remove_member(self, group_id: int, admin_id: int, member_id: int) -> dict:
+        """Admin kick thành viên khỏi nhóm"""
+        try:
+            # Kiểm tra admin có quyền không
+            admin_check = await db.fetch_one(
+                "SELECT role FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, admin_id)
+            )
+            
+            if not admin_check or admin_check["role"] != "admin":
+                return {"status": "error", "message": "Bạn không có quyền kick thành viên"}
+            
+            # Kiểm tra member có trong nhóm không
+            member_check = await db.fetch_one(
+                "SELECT role FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, member_id)
+            )
+            
+            if not member_check:
+                return {"status": "error", "message": "Thành viên không tồn tại trong nhóm"}
+            
+            # Không cho phép kick admin khác
+            if member_check["role"] == "admin":
+                return {"status": "error", "message": "Không thể kick admin khác"}
+            
+            # Xóa thành viên
+            await db.execute(
+                "DELETE FROM group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, member_id)
+            )
+            
+            return {"status": "ok", "message": "Đã kick thành viên khỏi nhóm"}
+            
+        except Exception as e:
+            print(f"❌ Lỗi remove_member: {e}")
             return {"status": "error", "message": str(e)}

@@ -144,11 +144,40 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Hiển thị tên nhóm
+        # Hiển thị tên nhóm với button quản lý
+        group_header_layout = QtWidgets.QHBoxLayout()
+        
         self.group_info_label = QtWidgets.QLabel()
         self.group_info_label.setStyleSheet("font-weight: bold; padding: 8px;")
         self.update_group_info()
-        layout.addWidget(self.group_info_label)
+        group_header_layout.addWidget(self.group_info_label)
+        
+        # Button quản lý nhóm
+        self.manage_group_btn = QtWidgets.QPushButton("⚙️ Quản lý")
+        self.manage_group_btn.setMaximumWidth(100)
+        self.manage_group_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #106ebe;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+        """)
+        self.manage_group_btn.clicked.connect(self.open_group_management)
+        group_header_layout.addWidget(self.manage_group_btn)
+        
+        group_header_widget = QtWidgets.QWidget()
+        group_header_widget.setLayout(group_header_layout)
+        layout.addWidget(group_header_widget)
 
         # Hiển thị thông tin thành viên
         self.members_info_label = QtWidgets.QLabel()
@@ -261,12 +290,18 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                 self.members_info_label.setText("Không thể lấy thông tin nhóm")
                 return
                 
+            print(f"[DEBUG] Loading members for group_id={group_id}")
+            
             # Gọi API để lấy thành viên
             response = await self.api_client.get_group_members(str(group_id), str(self.user_id))
             
-            if response and response.get("success"):
+            print(f"[DEBUG] Load members response: {response}")
+            
+            if response and response.get("status") == "ok":  # Sửa từ "success" thành "status" == "ok"
                 members = response.get("members", [])
                 member_count = len(members)
+                
+                print(f"[DEBUG] Found {member_count} members: {members}")
                 
                 # Store members data for later use
                 self.logic.group_members = members
@@ -294,6 +329,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                     self.members_info_label.setToolTip("Không có thành viên nào trong nhóm này")
             else:
                 error_msg = response.get("message", "Lỗi không xác định") if response else "Không có phản hồi từ server"
+                print(f"[DEBUG] Load members failed: {error_msg}")
                 self.members_info_label.setText(f"❌ Lỗi: {error_msg}")
                 
         except Exception as e:
@@ -329,6 +365,26 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         
         print(f"[DEBUG] Final user_data: {user_data}")
         self._show_user_profile(user_data)
+
+    def open_group_management(self):
+        """Mở dialog quản lý nhóm"""
+        from client.UI.messenger_ui.group_management_dialog import GroupManagementDialog
+        
+        dialog = GroupManagementDialog(
+            group_data=self.group_data,
+            current_user_id=self.user_id,
+            client=self.api_client,  # Truyền api_client thay vì connection
+            parent=self
+        )
+        
+        # Refresh group members when dialog closes
+        result = dialog.exec()
+        if result == QtWidgets.QDialog.DialogCode.Accepted:
+            # User left the group, need to handle this in parent
+            self.group_selected.emit({"action": "user_left_group", "group_id": self.group_data.get('group_id')})
+        else:
+            # Just refresh members info
+            asyncio.create_task(self.load_group_members())
         
     def _show_user_profile(self, user_data):
         """Show user profile window"""
