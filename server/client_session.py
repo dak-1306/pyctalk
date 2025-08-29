@@ -253,9 +253,9 @@ class ClientSession:
 
             elif action == "send_group_message":
                 group_id = data["data"]["group_id"]
-                user_id = data["data"]["user_id"]
-                message = data["data"]["message"]
-                result = await self.group_handler.send_group_message(user_id, group_id, message)  # Fixed parameter order
+                sender_id = data["data"]["sender_id"]
+                content = data["data"]["content"]
+                result = await self.group_handler.send_group_message(sender_id, group_id, content)  # Fixed parameter order
                 await self.send_response(result, request_id)
 
             elif action == "leave_group":

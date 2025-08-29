@@ -72,6 +72,8 @@ class MessageBubble(QtWidgets.QWidget):
                     margin-left: 44px;
                     margin-bottom: 2px;
                     padding: 0px;
+                    selection-background-color: rgba(0, 132, 255, 0.1);
+                    selection-color: #0084FF;
                 }
                 QLabel:hover {
                     color: #0073E6;
@@ -130,6 +132,8 @@ class MessageBubble(QtWidgets.QWidget):
                     padding: 10px 14px;
                     font-size: 14px;
                     line-height: 1.4;
+                    selection-background-color: rgba(255, 255, 255, 0.3);
+                    selection-color: white;
                 }
             """)
             bubble_widget.setMaximumWidth(320)
@@ -143,6 +147,8 @@ class MessageBubble(QtWidgets.QWidget):
                     font-size: 14px;
                     line-height: 1.4;
                     border: 1px solid #e4e6ea;
+                    selection-background-color: rgba(0, 132, 255, 0.2);
+                    selection-color: #1a1a1a;
                 }
             """)
             bubble_widget.setMaximumWidth(320)
@@ -177,11 +183,12 @@ class MessageBubble(QtWidgets.QWidget):
                         font-size: 11px;
                         margin: 2px 0;
                         padding: 2px 4px;
+                        selection-background-color: transparent;
+                        selection-color: #8E8E93;
                     }
                     QLabel:hover {
-                        color: #0084FF;
-                        background-color: #f7f8fa;
-                        border-radius: 8px;
+                        color: #65676B;
+                        background-color: transparent;
                     }
                 """)
                 
@@ -333,22 +340,21 @@ class MessageBubble(QtWidgets.QWidget):
                 self.show_timestamp = True
     
     def _on_bubble_hover(self, is_hovering):
-        """Handle bubble hover effect"""
+        """Handle bubble hover effect - tinh tế hơn"""
         if is_hovering:
-            # Add subtle shadow/glow effect on hover
+            # Add very subtle shadow effect on hover
             if self.is_sent:
                 self.setStyleSheet("""
                     MessageBubble {
-                        background-color: rgba(0, 132, 255, 0.05);
-                        border-radius: 8px;
+                        background-color: rgba(0, 132, 255, 0.03);
                     }
                 """)
             else:
                 self.setStyleSheet("""
                     MessageBubble {
-                        background-color: rgba(0, 0, 0, 0.02);
-                        border-radius: 8px;
+                        background-color: rgba(0, 0, 0, 0.01);
                     }
                 """)
         else:
+            # Remove hover effect
             self.setStyleSheet("")

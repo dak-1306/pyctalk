@@ -43,9 +43,9 @@ class GroupAPIClient:
 
     async def send_group_message(self, sender_id: str, group_id: str, content: str):
         return await self._send("send_group_message", {
-            "user_id": sender_id,  # Server expects user_id, not sender_id
+            "sender_id": sender_id,  # Server expects sender_id
             "group_id": group_id,
-            "message": content  # Server expects message, not content
+            "content": content  # Server expects content
         })
 
     async def get_friends(self, user_id: str):
@@ -83,10 +83,10 @@ class GroupAPIClient:
             "added_by": added_by
         })
 
-    async def get_user_friends(self, username: str):
+    async def get_user_friends(self, user_id: str):
         """Lấy danh sách bạn bè của user"""
-        return await self._send("get_friends", {
-            "username": username
+        return await self._send("get_user_friends", {
+            "user_id": user_id
         })
 
     async def _send(self, action: str, data: dict):

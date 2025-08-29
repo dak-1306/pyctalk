@@ -33,22 +33,21 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.message_count = 0
         self.time_formatter = TimeFormatter()
 
+        # Track theme mode
+        self.is_dark_mode = False
+        
         self._setupUI()
         
-        # Set overall widget styling
-        self.setStyleSheet("""
-            EmbeddedGroupChatWidget {
-                background-color: #ffffff;
-                border: none;
-            }
-        """)
-
+        # Set overall widget styling với theme support
+        self._apply_theme()
+        
         # Thiết lập nhóm hiện tại và load tin nhắn với lazy loading
         self.logic.current_group = group_data
-        asyncio.create_task(self.logic.load_initial_messages())
-        
-        # Load thông tin thành viên nhóm
-        asyncio.create_task(self.load_group_members())
+        # Delay async operations until widget is shown
+        self._pending_async_tasks = [
+            self.logic.load_initial_messages(),
+            self.load_group_members()
+        ]
         
         # Setup scroll loading detection
         self._setup_scroll_loading()
@@ -60,6 +59,12 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         try:
             if getattr(self.logic, "current_group", None):
                 import asyncio
+                # Execute pending async tasks
+                if hasattr(self, '_pending_async_tasks'):
+                    for task in self._pending_async_tasks:
+                        asyncio.create_task(task)
+                    self._pending_async_tasks = []  # Clear after execution
+                
                 # Check if user is still a member before loading messages
                 asyncio.create_task(self._check_membership_and_load())
         except Exception as e:
@@ -180,6 +185,9 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # Setup responsive design
+        self._setup_responsive_design()
+
         # Hiển thị tên nhóm với button quản lý - Header Bar
         group_header_layout = QtWidgets.QHBoxLayout()
         group_header_layout.setContentsMargins(16, 12, 16, 12)
@@ -212,15 +220,36 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             }
             QPushButton:hover {
                 background-color: #0073E6;
-                transform: translateY(-1px);
             }
             QPushButton:pressed {
                 background-color: #005CBF;
-                transform: translateY(0px);
             }
         """)
         self.manage_group_btn.clicked.connect(self.open_group_management)
         group_header_layout.addWidget(self.manage_group_btn)
+        
+        # Theme toggle button
+        self.theme_toggle_btn = QtWidgets.QPushButton("🌙")
+        self.theme_toggle_btn.setFixedSize(36, 36)
+        self.theme_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #666666;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #f7f8fa;
+            }
+            QPushButton:pressed {
+                background-color: #e4e6ea;
+            }
+        """)
+        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
+        self.theme_toggle_btn.setToolTip("Chuyển đổi chế độ sáng/tối")
+        group_header_layout.addWidget(self.theme_toggle_btn)
         
         group_header_widget = QtWidgets.QWidget()
         group_header_widget.setLayout(group_header_layout)
@@ -316,7 +345,7 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         self.scroll_area.setWidget(self.messages_widget)
         layout.addWidget(self.scroll_area, stretch=1)
 
-        # Input gửi tin - Modern design
+        # Input gửi tin - Modern design với emoji picker
         input_container = QtWidgets.QWidget()
         input_container.setStyleSheet("""
             QWidget {
@@ -328,7 +357,28 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         
         input_layout = QtWidgets.QHBoxLayout(input_container)
         input_layout.setContentsMargins(16, 12, 16, 12)
-        input_layout.setSpacing(12)
+        input_layout.setSpacing(8)
+
+        # Emoji button
+        self.emoji_button = QtWidgets.QPushButton("😊")
+        self.emoji_button.setFixedSize(36, 36)
+        self.emoji_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 18px;
+                font-size: 18px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #f7f8fa;
+            }
+            QPushButton:pressed {
+                background-color: #e4e6ea;
+            }
+        """)
+        self.emoji_button.clicked.connect(self._show_emoji_picker)
+        input_layout.addWidget(self.emoji_button)
 
         self.message_input = QtWidgets.QLineEdit()
         self.message_input.setPlaceholderText("Nhập tin nhắn...")
@@ -355,32 +405,44 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         # Connect text changed để hiển thị typing indicator
         self.message_input.textChanged.connect(self._on_text_changed)
 
+        # Typing indicator label
+        self.typing_indicator = QtWidgets.QLabel("")
+        self.typing_indicator.setStyleSheet("""
+            QLabel {
+                color: #8a8d91;
+                font-size: 12px;
+                font-style: italic;
+                padding: 0px 8px;
+            }
+        """)
+        self.typing_indicator.hide()
+
         self.send_button = QtWidgets.QPushButton("➤")
-        self.send_button.setFixedSize(40, 40)
+        self.send_button.setFixedSize(36, 36)
         self.send_button.setStyleSheet("""
             QPushButton {
-                background-color: #0084FF;
+                background-color: #bcc0c4;
                 color: white;
                 border: none;
-                border-radius: 20px;
+                border-radius: 18px;
                 font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #0073E6;
-                transform: scale(1.05);
             }
             QPushButton:pressed {
                 background-color: #005CBF;
-                transform: scale(0.95);
             }
             QPushButton:disabled {
                 background-color: #bcc0c4;
             }
         """)
         self.send_button.clicked.connect(self._on_send_message)
+        self.send_button.setEnabled(False)
 
         input_layout.addWidget(self.message_input, stretch=1)
+        input_layout.addWidget(self.typing_indicator)
         input_layout.addWidget(self.send_button)
         layout.addWidget(input_container)
     
@@ -412,12 +474,243 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         if hasattr(self, 'loading_bar'):
             self.loading_bar.show()
     
+    def _apply_theme(self):
+        """Áp dụng theme (light/dark) cho toàn bộ widget"""
+        if self.is_dark_mode:
+            self.setStyleSheet("""
+                EmbeddedGroupChatWidget {
+                    background-color: #1a1a1a;
+                    border: none;
+                    color: #ffffff;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                EmbeddedGroupChatWidget {
+                    background-color: #ffffff;
+                    border: none;
+                    color: #1a1a1a;
+                }
+            """)
+        
+        # Update các component khác
+        self._update_component_themes()
+
+    def _update_component_themes(self):
+        """Cập nhật theme cho các component con"""
+        if self.is_dark_mode:
+            # Update theme toggle button
+            self.theme_toggle_btn.setText("☀️")
+            self.theme_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 18px;
+                    font-size: 16px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #404040;
+                }
+                QPushButton:pressed {
+                    background-color: #555555;
+                }
+            """)
+            
+            # Header
+            self.group_info_label.setStyleSheet("""
+                QLabel {
+                    font-weight: bold; 
+                    font-size: 16px;
+                    color: #ffffff;
+                    padding: 0px;
+                }
+            """)
+            
+            # Members info
+            self.members_info_label.setStyleSheet("""
+                QLabel {
+                    color: #b0b0b0; 
+                    padding: 8px 16px; 
+                    font-size: 12px; 
+                    background-color: #2a2a2a;
+                    border-bottom: 1px solid #404040;
+                    margin: 0px;
+                }
+            """)
+            
+            # Scroll area
+            self.scroll_area.setStyleSheet("""
+                QScrollArea {
+                    background-color: #1a1a1a;
+                    border: none;
+                }
+                QScrollBar:vertical {
+                    background-color: #2a2a2a;
+                    width: 8px;
+                    border-radius: 4px;
+                    margin: 0px;
+                }
+                QScrollBar::handle:vertical {
+                    background-color: #555555;
+                    border-radius: 4px;
+                    min-height: 20px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background-color: #777777;
+                }
+            """)
+            
+            # Emoji button
+            self.emoji_button.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 18px;
+                    font-size: 18px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #404040;
+                }
+                QPushButton:pressed {
+                    background-color: #555555;
+                }
+            """)
+            
+            # Typing indicator
+            self.typing_indicator.setStyleSheet("""
+                QLabel {
+                    color: #b0b0b0;
+                    font-size: 12px;
+                    font-style: italic;
+                    padding: 0px 8px;
+                }
+            """)
+            
+        else:
+            # Update theme toggle button
+            self.theme_toggle_btn.setText("🌙")
+            self.theme_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #666666;
+                    border: none;
+                    border-radius: 18px;
+                    font-size: 16px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #f7f8fa;
+                }
+                QPushButton:pressed {
+                    background-color: #e4e6ea;
+                }
+            """)
+            
+            # Light mode styles (giữ nguyên)
+            self.group_info_label.setStyleSheet("""
+                QLabel {
+                    font-weight: bold; 
+                    font-size: 16px;
+                    color: #1a1a1a;
+                    padding: 0px;
+                }
+            """)
+            
+            self.members_info_label.setStyleSheet("""
+                QLabel {
+                    color: #65676b; 
+                    padding: 8px 16px; 
+                    font-size: 12px; 
+                    background-color: #f7f8fa;
+                    border-bottom: 1px solid #e4e6ea;
+                    margin: 0px;
+                }
+            """)
+            
+            self.scroll_area.setStyleSheet("""
+                QScrollArea {
+                    background-color: #ffffff;
+                    border: none;
+                }
+                QScrollBar:vertical {
+                    background-color: #f7f8fa;
+                    width: 8px;
+                    border-radius: 4px;
+                    margin: 0px;
+                }
+                QScrollBar::handle:vertical {
+                    background-color: #c4c4c4;
+                    border-radius: 4px;
+                    min-height: 20px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background-color: #a8a8a8;
+                }
+            """)
+            
+            # Emoji button
+            self.emoji_button.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 18px;
+                    font-size: 18px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #f7f8fa;
+                }
+                QPushButton:pressed {
+                    background-color: #e4e6ea;
+                }
+            """)
+            
+            # Typing indicator
+            self.typing_indicator.setStyleSheet("""
+                QLabel {
+                    color: #8a8d91;
+                    font-size: 12px;
+                    font-style: italic;
+                    padding: 0px 8px;
+                }
+            """)
+
+    def toggle_theme(self):
+        """Chuyển đổi giữa light/dark mode"""
+        self.is_dark_mode = not self.is_dark_mode
+        self._apply_theme()
+        
+        # Animate theme transition
+        self._animate_theme_transition()
+
+    def _animate_theme_transition(self):
+        """Animation cho việc chuyển theme"""
+        try:
+            from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+            
+            # Fade animation cho toàn bộ widget
+            animation = QPropertyAnimation(self, b"windowOpacity")
+            animation.setDuration(300)
+            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            animation.setStartValue(0.8)
+            animation.setEndValue(1.0)
+            animation.start()
+            
+        except Exception as e:
+            print(f"[DEBUG] Theme transition animation failed: {e}")
+
     def _animate_message_bubble(self, bubble):
-        """Add smooth fade-in animation to message bubble"""
+        """Add smooth fade-in animation to message bubble với theme support"""
         try:
             # Ensure bubble is visible first
             bubble.setVisible(True)
             bubble.show()
+            
+            # Apply theme to bubble
+            self._apply_theme_to_bubble(bubble)
             
             # Skip animation for now to fix visibility issues
             print(f"[DEBUG] Message bubble animated and visible: {bubble.isVisible()}")
@@ -427,6 +720,62 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             # Fallback - just show bubble instantly
             bubble.setVisible(True)
             bubble.show()
+
+    def _apply_theme_to_bubble(self, bubble):
+        """Áp dụng theme cho message bubble"""
+        try:
+            # Update bubble styling based on theme
+            if hasattr(bubble, 'is_sent') and hasattr(bubble, 'setStyleSheet'):
+                if bubble.is_sent:
+                    if self.is_dark_mode:
+                        bubble.setStyleSheet("""
+                            QLabel {
+                                background-color: #0084FF;
+                                color: white;
+                                border-radius: 18px;
+                                padding: 10px 14px;
+                                font-size: 14px;
+                                line-height: 1.4;
+                            }
+                        """)
+                    else:
+                        bubble.setStyleSheet("""
+                            QLabel {
+                                background-color: #0084FF;
+                                color: white;
+                                border-radius: 18px;
+                                padding: 10px 14px;
+                                font-size: 14px;
+                                line-height: 1.4;
+                            }
+                        """)
+                else:
+                    if self.is_dark_mode:
+                        bubble.setStyleSheet("""
+                            QLabel {
+                                background-color: #333333;
+                                color: #ffffff;
+                                border-radius: 18px;
+                                padding: 10px 14px;
+                                font-size: 14px;
+                                line-height: 1.4;
+                                border: 1px solid #555555;
+                            }
+                        """)
+                    else:
+                        bubble.setStyleSheet("""
+                            QLabel {
+                                background-color: #f1f3f4;
+                                color: #1a1a1a;
+                                border-radius: 18px;
+                                padding: 10px 14px;
+                                font-size: 14px;
+                                line-height: 1.4;
+                                border: 1px solid #e4e6ea;
+                            }
+                        """)
+        except Exception as e:
+            print(f"[DEBUG] Failed to apply theme to bubble: {e}")
 
     def hide_loading_indicator(self):
         """Ẩn loading bar"""
@@ -480,20 +829,77 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
             # Nếu không có scroll trước đó, scroll xuống một chút để không ở đầu
             scrollbar.setValue(100)
 
+    def _show_emoji_picker(self):
+        """Hiển thị emoji picker đơn giản"""
+        self._show_simple_emoji_picker()
+
+    def _show_simple_emoji_picker(self):
+        """Emoji picker đơn giản nếu không có dialog riêng"""
+        emojis = ["😀", "😂", "😊", "😍", "🥰", "😘", "😉", "😎", "🤔", "😮", "😢", "😭", 
+                 "😤", "😡", "🥺", "😴", "🤗", "🤭", "🤫", "🤥", "😈", "👻", "💀", "👽",
+                 "👍", "👎", "👌", "✌️", "🤞", "👏", "🙌", "🤝", "🙏", "💪", "🤳", "💅",
+                 "❤️", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞",
+                 "💓", "💗", "💖", "💘", "💝", "💟", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️",
+                 "🔥", "💫", "⭐", "🌟", "✨", "💥", "💢", "💦", "💨", "💬", "👁️‍🗨️", "🗨️", "🗯️", "💭"]
+        
+        # Tạo menu popup với emojis
+        menu = QtWidgets.QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #ffffff;
+                border: 1px solid #e4e6ea;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 8px;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            QMenu::item:selected {
+                background-color: #f7f8fa;
+            }
+        """)
+        
+        # Chia emojis thành các hàng
+        emojis_per_row = 8
+        current_row = []
+        
+        for i, emoji in enumerate(emojis):
+            action = menu.addAction(emoji)
+            action.triggered.connect(lambda checked, e=emoji: self._insert_emoji(e))
+            
+            current_row.append(action)
+            if (i + 1) % emojis_per_row == 0:
+                menu.addSeparator()
+                current_row = []
+        
+        # Hiển thị menu tại vị trí emoji button
+        button_pos = self.emoji_button.mapToGlobal(QtCore.QPoint(0, self.emoji_button.height()))
+        menu.exec(button_pos)
+
+    def _insert_emoji(self, emoji):
+        """Chèn emoji vào input field"""
+        current_text = self.message_input.text()
+        self.message_input.setText(current_text + emoji)
+        self.message_input.setFocus()
+
     def _on_text_changed(self):
-        """Handle typing indicator"""
+        """Handle typing indicator và send button state"""
         text = self.message_input.text()
+        
         # Enable/disable send button based on text content
-        self.send_button.setEnabled(bool(text.strip()))
+        has_text = bool(text.strip())
+        self.send_button.setEnabled(has_text)
         
         # Update send button style
-        if text.strip():
+        if has_text:
             self.send_button.setStyleSheet("""
                 QPushButton {
                     background-color: #0084FF;
                     color: white;
                     border: none;
-                    border-radius: 20px;
+                    border-radius: 18px;
                     font-size: 16px;
                     font-weight: bold;
                 }
@@ -512,11 +918,66 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
                     background-color: #bcc0c4;
                     color: white;
                     border: none;
-                    border-radius: 20px;
+                    border-radius: 18px;
                     font-size: 16px;
                     font-weight: bold;
                 }
             """)
+        
+        # Send typing indicator to server (nếu cần)
+        self._handle_typing_indicator(text)
+
+    def _handle_typing_indicator(self, text):
+        """Xử lý typing indicator"""
+        # Chỉ gửi typing indicator nếu có text và chưa gửi trong 2 giây
+        if text.strip():
+            current_time = QtCore.QDateTime.currentDateTime().toMSecsSinceEpoch()
+            if not hasattr(self, '_last_typing_time') or current_time - self._last_typing_time > 2000:
+                self._last_typing_time = current_time
+                # Gửi typing indicator đến server (nếu API hỗ trợ)
+                asyncio.create_task(self._send_typing_indicator())
+        else:
+            # Clear typing indicator khi xóa text
+            if hasattr(self, '_last_typing_time'):
+                delattr(self, '_last_typing_time')
+                asyncio.create_task(self._clear_typing_indicator())
+
+    async def _send_typing_indicator(self):
+        """Gửi typing indicator đến server"""
+        try:
+            # TODO: Implement API call to send typing indicator
+            print(f"[DEBUG] Sending typing indicator for group {self.group_data.get('group_id')}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to send typing indicator: {e}")
+
+    async def _clear_typing_indicator(self):
+        """Xóa typing indicator"""
+        try:
+            # TODO: Implement API call to clear typing indicator
+            print(f"[DEBUG] Clearing typing indicator for group {self.group_data.get('group_id')}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to clear typing indicator: {e}")
+
+    def show_typing_indicator(self, username):
+        """Hiển thị typing indicator từ user khác"""
+        if username != self.username:
+            self.typing_indicator.setText(f"{username} đang gõ...")
+            self.typing_indicator.show()
+            
+            # Auto hide after 3 seconds
+            if hasattr(self, '_typing_timer'):
+                self._typing_timer.stop()
+            
+            self._typing_timer = QTimer()
+            self._typing_timer.setSingleShot(True)
+            self._typing_timer.timeout.connect(self.hide_typing_indicator)
+            self._typing_timer.start(3000)
+
+    def hide_typing_indicator(self):
+        """Ẩn typing indicator"""
+        self.typing_indicator.hide()
+        if hasattr(self, '_typing_timer'):
+            self._typing_timer.stop()
 
     def update_group_info(self):
         """Cập nhật thông tin nhóm hiển thị"""
@@ -730,3 +1191,111 @@ class EmbeddedGroupChatWidget(QtWidgets.QWidget):
         print(f"[DEBUG] Timestamp clicked: {timestamp}")
         # Could show detailed timestamp or message info
         # For now, just log it
+
+    def add_message_reaction(self, message_id, emoji):
+        """Thêm reaction cho tin nhắn"""
+        print(f"[DEBUG] Adding reaction {emoji} to message {message_id}")
+        # TODO: Implement API call to add reaction
+        # For now, just show visual feedback
+        self._show_reaction_feedback(emoji)
+
+    def _show_reaction_feedback(self, emoji):
+        """Hiển thị feedback khi thêm reaction"""
+        # Create a temporary floating emoji animation
+        try:
+            floating_emoji = QtWidgets.QLabel(emoji)
+            floating_emoji.setStyleSheet("""
+                QLabel {
+                    font-size: 24px;
+                    background-color: transparent;
+                    border: none;
+                }
+            """)
+            floating_emoji.setParent(self)
+            floating_emoji.move(self.width() // 2 - 12, self.height() // 2 - 12)
+            floating_emoji.show()
+            
+            # Animate upward and fade out
+            from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+            
+            # Move animation
+            move_anim = QPropertyAnimation(floating_emoji, b"pos")
+            move_anim.setDuration(1000)
+            move_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+            move_anim.setStartValue(floating_emoji.pos())
+            move_anim.setEndValue(floating_emoji.pos() + QtCore.QPoint(0, -50))
+            
+            # Opacity animation
+            opacity_anim = QPropertyAnimation(floating_emoji, b"windowOpacity")
+            opacity_anim.setDuration(1000)
+            opacity_anim.setStartValue(1.0)
+            opacity_anim.setEndValue(0.0)
+            
+            # Start animations
+            move_anim.start()
+            opacity_anim.start()
+            
+            # Clean up after animation
+            QTimer.singleShot(1000, floating_emoji.deleteLater)
+            
+        except Exception as e:
+            print(f"[DEBUG] Reaction feedback animation failed: {e}")
+
+    def _setup_responsive_design(self):
+        """Thiết lập responsive design cho các màn hình khác nhau"""
+        # Adjust sizes based on screen size
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen:
+            screen_size = screen.size()
+            screen_width = screen_size.width()
+            
+            # Adjust message bubble max width based on screen size
+            if screen_width < 1200:  # Small screens
+                self.max_bubble_width = 250
+            elif screen_width < 1600:  # Medium screens
+                self.max_bubble_width = 320
+            else:  # Large screens
+                self.max_bubble_width = 400
+            
+            # Adjust font sizes
+            if screen_width < 1200:
+                self.base_font_size = 12
+                self.header_font_size = 14
+            else:
+                self.base_font_size = 14
+                self.header_font_size = 16
+
+    def resizeEvent(self, event):
+        """Handle resize events for responsive design"""
+        super().resizeEvent(event)
+        # Update responsive settings when window is resized
+        self._setup_responsive_design()
+        self._update_component_sizes()
+
+    def _update_component_sizes(self):
+        """Cập nhật kích thước components theo responsive design"""
+        try:
+            # Update message input size
+            if hasattr(self, 'max_bubble_width'):
+                # Update existing bubbles if needed
+                for i in range(self.messages_layout.count()):
+                    item = self.messages_layout.itemAt(i)
+                    if item and item.widget():
+                        widget = item.widget()
+                        if hasattr(widget, 'setMaximumWidth'):
+                            widget.setMaximumWidth(self.max_bubble_width)
+            
+            # Update font sizes
+            if hasattr(self, 'base_font_size'):
+                # Update input field font
+                font = self.message_input.font()
+                font.setPointSize(self.base_font_size)
+                self.message_input.setFont(font)
+                
+                # Update header font
+                header_font = self.group_info_label.font()
+                header_font.setPointSize(self.header_font_size)
+                self.group_info_label.setFont(header_font)
+                
+        except Exception as e:
+            print(f"[DEBUG] Failed to update component sizes: {e}")
